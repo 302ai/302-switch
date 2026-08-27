@@ -682,17 +682,17 @@ jobs:
           cat > "$BODY_FILE" <<'BODY_HEADER'
           ## 302 Switch ${{ github.ref_name }}
 
-          官网 / Website: [ccswitch.io](https://ccswitch.io)
+          Provider switcher for Claude Code / Claude Desktop / Codex / Gemini CLI / OpenCode / OpenClaw / Hermes Agent — the [302.AI](https://302.ai) edition.
 
-          Claude Code / Claude Desktop / Codex / Gemini CLI / OpenCode / OpenClaw / Hermes Agent 供应商切换器（302.AI 版）。
+          基于 [cc-switch](https://github.com/farion1231/cc-switch)：开箱内置 302.AI 供应商与官方端点，填入 API Key 即连，自定义供应商完全开放。详见 [README](https://github.com/302ai/302-switch#readme)。
 
           **下载 / Download**：按平台从下方 Assets 选择——
 
           | 平台 | 文件 |
           |---|---|
-          | macOS（通用包） | `*-macOS.dmg` / `.zip` |
-          | Windows（x64 / ARM64） | `*-Windows.msi` / `*-Windows-arm64.msi`（另有 `*-Portable.zip`） |
-          | Linux（x64 / ARM64） | `*-Linux-{x86_64,arm64}.deb` / `.rpm` / `.AppImage` |
+          | macOS | `*-macOS.dmg` / `.zip` |
+          | Windows | `*-Windows.msi` / `*-Windows-arm64.msi` / `*-Portable.zip` |
+          | Linux | `*-Linux-{x86_64,arm64}.deb` / `.rpm` / `.AppImage` |
 
           > `.tar.gz` 与 `latest.json` 为自动更新专用，无需手动下载。平台说明见 [README](https://github.com/302ai/302-switch#readme)。
 
