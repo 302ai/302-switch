@@ -67,7 +67,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlFMzk0MDdFRjE0QURBODMKUldTRDJrcnhma0E1bmxjTjVOL0o5UlRYb050N0t1OEJDVVJ2cEdLRytxbzRQMG56cGJQc3lKY2IK",
       "endpoints": [
-        "https://github.com/302ai/302-cc-switch/releases/latest/download/latest.json"
+        "https://github.com/302ai/302-switch/releases/latest/download/latest.json"
       ]
     }
   }
