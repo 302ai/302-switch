@@ -12,17 +12,17 @@ English | [中文](README_ZH.md) | [Changelog](CHANGELOG.md)
 
 ## Download
 
-Grab the installer for your platform from the [latest release](https://github.com/WanjiaRuan/302-cc-switch/releases/latest):
+Grab the installer for your platform from the [latest release](https://github.com/302ai/302-switch/releases/latest):
 
 | Platform | File |
 |---|---|
-| macOS (Apple Silicon) | `302-CC-Switch_..._macOS_Apple-Silicon.dmg` |
-| macOS (Intel) | `302-CC-Switch_..._macOS_Intel.dmg` |
-| Windows (x64) | `302-CC-Switch_..._Windows_x64_Setup.exe` |
+| macOS (Apple Silicon & Intel, universal) | `302-Switch_..._macOS.dmg` |
+| Windows (x64 / ARM64) | `302-Switch_..._Windows.msi` / `302-Switch_..._Windows-arm64.msi` (portable `.zip` also available) |
+| Linux (x64 / ARM64) | `302-Switch_..._Linux-{x86_64,arm64}.deb` / `.rpm` / `.AppImage` |
 
-Older versions and release notes live on the [Releases page](https://github.com/WanjiaRuan/302-cc-switch/releases).
+Older versions and release notes live on the [Releases page](https://github.com/302ai/302-switch/releases).
 
-> **macOS Gatekeeper**: the app is not signed with an Apple Developer certificate yet. On first launch, right-click the app → **Open** → **Open** to bypass the "unidentified developer" warning. You only need to do this once.
+> **macOS**: builds are signed and notarized with an Apple Developer certificate — just install and go. The app also auto-updates itself through Tauri's updater (signatures published alongside each release).
 
 ## What we added for 302.AI users
 

@@ -12,17 +12,17 @@
 
 ## 下载
 
-从 [最新 Release](https://github.com/WanjiaRuan/302-cc-switch/releases/latest) 下载对应平台的安装包：
+从 [最新 Release](https://github.com/302ai/302-switch/releases/latest) 下载对应平台的安装包：
 
 | 平台 | 文件 |
 |---|---|
-| macOS（Apple 芯片） | `302-CC-Switch_..._macOS_Apple-Silicon.dmg` |
-| macOS（Intel） | `302-CC-Switch_..._macOS_Intel.dmg` |
-| Windows（x64） | `302-CC-Switch_..._Windows_x64_Setup.exe` |
+| macOS（Apple 芯片 & Intel，通用包） | `302-Switch_..._macOS.dmg` |
+| Windows（x64 / ARM64） | `302-Switch_..._Windows.msi` / `302-Switch_..._Windows-arm64.msi`（另有免安装 `.zip`） |
+| Linux（x64 / ARM64） | `302-Switch_..._Linux-{x86_64,arm64}.deb` / `.rpm` / `.AppImage` |
 
-历史版本和更新说明见 [Releases 页面](https://github.com/WanjiaRuan/302-cc-switch/releases)。
+历史版本和更新说明见 [Releases 页面](https://github.com/302ai/302-switch/releases)。
 
-> **macOS 首次打开**：应用尚未使用 Apple 开发者证书签名。首次启动请**右键点击应用 → 打开 → 打开**，跳过「未验证开发者」提示，之后正常双击即可。
+> **macOS**：安装包已使用 Apple 开发者证书签名并公证，直接安装即可；应用内置自动更新（Tauri updater，更新包同样带签名校验）。
 
 ## 我们为 302.AI 用户加了什么
 

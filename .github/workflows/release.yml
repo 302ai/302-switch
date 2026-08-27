@@ -682,19 +682,19 @@ jobs:
           cat > "$BODY_FILE" <<'BODY_HEADER'
           ## 302 Switch ${{ github.ref_name }}
 
-          🌐 **Only Official Website / 唯一官方网站 / 唯一の公式サイト**: [ccswitch.io](https://ccswitch.io)
+          官网 / Website: [ccswitch.io](https://ccswitch.io)
 
-          Claude Code 供应商切换工具
+          Claude Code / Claude Desktop / Codex / Gemini CLI / OpenCode / OpenClaw / Hermes Agent 供应商切换器（302.AI 版）。
 
-          ### 下载
+          **下载 / Download**：按平台从下方 Assets 选择——
 
-          - **macOS**: `302-Switch-${{ github.ref_name }}-macOS.dmg`（推荐）或 `302-Switch-${{ github.ref_name }}-macOS.zip`（解压即用）
-          - **Windows (x86_64)**: `302-Switch-${{ github.ref_name }}-Windows.msi`（安装版）或 `302-Switch-${{ github.ref_name }}-Windows-Portable.zip`（绿色版）
-          - **Windows (ARM64)**: `302-Switch-${{ github.ref_name }}-Windows-arm64.msi`（安装版）或 `302-Switch-${{ github.ref_name }}-Windows-arm64-Portable.zip`（绿色版）
-          - **Linux (x86_64)**: `302-Switch-${{ github.ref_name }}-Linux-x86_64.AppImage` / `.deb` / `.rpm`
-          - **Linux (ARM64)**: `302-Switch-${{ github.ref_name }}-Linux-arm64.AppImage` / `.deb` / `.rpm`
+          | 平台 | 文件 |
+          |---|---|
+          | macOS（通用包） | `*-macOS.dmg` / `.zip` |
+          | Windows（x64 / ARM64） | `*-Windows.msi` / `*-Windows-arm64.msi`（另有 `*-Portable.zip`） |
+          | Linux（x64 / ARM64） | `*-Linux-{x86_64,arm64}.deb` / `.rpm` / `.AppImage` |
 
-          > `.tar.gz` 为 Tauri updater 自动更新专用，无需手动下载。
+          > `.tar.gz` 与 `latest.json` 为自动更新专用，无需手动下载。平台说明见 [README](https://github.com/302ai/302-switch#readme)。
 
           ---
           BODY_HEADER
