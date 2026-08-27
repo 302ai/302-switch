@@ -25,13 +25,20 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import ApiKeyInput from "@/components/providers/forms/ApiKeyInput";
+import { Input } from "@/components/ui/input";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import {
   AI302_API_KEY_URL,
+  detectAi302ApiKeyLabel,
+  detectAi302BrandName,
   getAi302ModelStrategy,
+  isAi302CustomEndpoint,
+  isValidAi302BaseUrl,
+  normalizeAi302RootUrl,
   readAi302ApiKey,
   readAi302BaseUrl,
   writeAi302ApiKey,
+  writeAi302BaseUrl,
 } from "@/config/ai302";
 import { fetchModelsForConfig } from "@/lib/api/model-fetch";
 import { settingsApi, type AppId } from "@/lib/api";
@@ -69,6 +76,7 @@ export function Ai302KeyDialog({
 }: Ai302KeyDialogProps) {
   const { t } = useTranslation();
   const [apiKey, setApiKey] = useState("");
+  const [baseUrlInput, setBaseUrlInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [verify, setVerify] = useState<VerifyState>({ status: "idle" });
 
@@ -83,13 +91,25 @@ export function Ai302KeyDialog({
     [provider?.id, appId, open],
   );
 
-  // 每次打开时回填当前 key，关闭丢弃未保存的输入
+  const initialBaseUrl = useMemo(
+    () =>
+      provider
+        ? readAi302BaseUrl(
+            appId,
+            provider.settingsConfig as Record<string, unknown>,
+          )
+        : "",
+    [provider?.id, appId, open],
+  );
+
+  // 每次打开时回填当前 key / 地址，关闭丢弃未保存的输入
   useEffect(() => {
     if (open) {
       setApiKey(initialKey);
+      setBaseUrlInput(initialBaseUrl);
       setVerify({ status: "idle" });
     }
-  }, [open, initialKey]);
+  }, [open, initialKey, initialBaseUrl]);
 
   if (!provider) {
     return null;
@@ -98,6 +118,14 @@ export function Ai302KeyDialog({
   const config = provider.settingsConfig as Record<string, unknown>;
   const modelStrategy = getAi302ModelStrategy(appId, config);
   const baseUrl = readAi302BaseUrl(appId, config);
+  // 非标准 302.AI 域名 = 企业私有部署，地址在这里可编辑；标准域名（国内/海外）只读展示。
+  const isCustomEndpoint = isAi302CustomEndpoint(baseUrl);
+  const baseUrlTrimmed = baseUrlInput.trim();
+  const baseUrlValid =
+    baseUrlTrimmed !== "" && isValidAi302BaseUrl(baseUrlTrimmed);
+  const customBrand = isCustomEndpoint
+    ? detectAi302BrandName(baseUrlTrimmed || baseUrl)
+    : null;
   const clientName =
     appId === "claude"
       ? "Claude Code"
@@ -115,9 +143,16 @@ export function Ai302KeyDialog({
       setVerify({ status: "fail", reason: "empty" });
       return;
     }
+    if (isCustomEndpoint && !baseUrlValid) {
+      setVerify({ status: "fail", reason: "network" });
+      return;
+    }
     setVerify({ status: "loading" });
     try {
-      const models = await fetchModelsForConfig(baseUrl, trimmed);
+      const probeUrl = isCustomEndpoint
+        ? normalizeAi302RootUrl(baseUrlInput)
+        : baseUrl;
+      const models = await fetchModelsForConfig(probeUrl, trimmed);
       setVerify({ status: "ok", modelCount: models.length });
     } catch (err) {
       const msg = String(err);
@@ -129,10 +164,11 @@ export function Ai302KeyDialog({
   const handleSave = async () => {
     setIsSubmitting(true);
     try {
-      const updated: Provider = {
-        ...provider,
-        settingsConfig: writeAi302ApiKey(appId, config, apiKey.trim()),
-      };
+      let nextConfig = writeAi302ApiKey(appId, config, apiKey.trim());
+      if (isCustomEndpoint) {
+        nextConfig = writeAi302BaseUrl(appId, nextConfig, baseUrlInput);
+      }
+      const updated: Provider = { ...provider, settingsConfig: nextConfig };
       await onSubmit({ provider: updated, originalId: provider.id });
       onOpenChange(false);
     } finally {
@@ -171,9 +207,13 @@ export function Ai302KeyDialog({
                 ? t("ai302.verifyFailKey", {
                     defaultValue: "Key 无效或已过期",
                   })
-                : t("ai302.verifyFailNetwork", {
-                    defaultValue: "连不上 302.AI，请检查网络后重试",
-                  })}
+                : isCustomEndpoint
+                  ? t("onboarding.keyNetworkErrorEnterprise", {
+                      defaultValue: "无法连接该地址，请检查 Base URL 是否正确",
+                    })
+                  : t("ai302.verifyFailNetwork", {
+                      defaultValue: "连不上 302.AI，请检查网络后重试",
+                    })}
           </span>
         );
       default:
@@ -187,17 +227,56 @@ export function Ai302KeyDialog({
         <DialogHeader className="text-left sm:text-left">
           <DialogTitle className="flex items-center gap-2.5">
             <ProviderIcon icon="ai302" name={provider.name} size={24} />
-            {t("ai302.dialogTitle", { defaultValue: "302.AI API Key" })}
+            {isCustomEndpoint
+              ? (customBrand ??
+                t("ai302.dialogTitleEnterprise", {
+                  defaultValue: "自定义接口",
+                }))
+              : t("ai302.dialogTitle", { defaultValue: "302.AI API Key" })}
           </DialogTitle>
           <DialogDescription>
-            {t("ai302.dialogHint", {
-              defaultValue:
-                "接口地址已预置，模型策略会在下方明确显示。现在只差这一把 Key。",
-            })}
+            {isCustomEndpoint
+              ? t("ai302.dialogHintEnterprise", {
+                  defaultValue: "接口地址和 Key 都可以在这里修改。",
+                })
+              : t("ai302.dialogHint", {
+                  defaultValue:
+                    "接口地址已预置，模型策略会在下方明确显示。现在只差这一把 Key。",
+                })}
           </DialogDescription>
         </DialogHeader>
 
         <div className="px-6 py-5 space-y-4">
+          {isCustomEndpoint && (
+            <div className="space-y-2">
+              <label
+                htmlFor="ai302-base-url"
+                className="block text-sm font-medium text-foreground"
+              >
+                {t("onboarding.enterpriseUrlLabel", {
+                  defaultValue: "接口地址（Base URL）",
+                })}
+              </label>
+              <Input
+                id="ai302-base-url"
+                value={baseUrlInput}
+                onChange={(event) => {
+                  setBaseUrlInput(event.target.value);
+                  setVerify({ status: "idle" });
+                }}
+                placeholder="https://your-company.302.ai"
+              />
+              {baseUrlTrimmed !== "" && !baseUrlValid && (
+                <p className="text-xs text-destructive">
+                  {t("onboarding.enterpriseUrlInvalid", {
+                    defaultValue:
+                      "地址格式不对，需要以 http:// 或 https:// 开头",
+                  })}
+                </p>
+              )}
+            </div>
+          )}
+
           <ApiKeyInput
             id="ai302-api-key"
             value={apiKey}
@@ -207,24 +286,41 @@ export function Ai302KeyDialog({
               setVerify({ status: "idle" });
             }}
             placeholder="sk-..."
-            label={t("ai302.keyLabel", { defaultValue: "API Key" })}
+            label={
+              isCustomEndpoint
+                ? detectAi302ApiKeyLabel(baseUrlTrimmed || baseUrl)
+                : t("ai302.keyLabel", { defaultValue: "API Key" })
+            }
           />
 
           <div className="flex items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={() => void settingsApi.openExternal(AI302_API_KEY_URL)}
-              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              {t("ai302.getKey", { defaultValue: "没有 Key？去 302.AI 领取" })}
-            </button>
+            {isCustomEndpoint ? (
+              <span className="text-xs text-muted-foreground">
+                {t("onboarding.enterpriseKeyHint", {
+                  defaultValue: "在企业版管理后台生成 API Key",
+                })}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void settingsApi.openExternal(AI302_API_KEY_URL)}
+                className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                {t("ai302.getKey", {
+                  defaultValue: "没有 Key？去 302.AI 领取",
+                })}
+              </button>
+            )}
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => void handleVerify(apiKey)}
-              disabled={verify.status === "loading"}
+              disabled={
+                verify.status === "loading" ||
+                (isCustomEndpoint && !baseUrlValid)
+              }
             >
               {t("ai302.verify", { defaultValue: "验证 Key" })}
             </Button>
@@ -244,10 +340,15 @@ export function Ai302KeyDialog({
                 </div>
                 {modelStrategy.mode === "follow" ? (
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    {t("ai302.modelStrategyFollow", {
-                      client: clientName,
-                      defaultValue: `自动路由：跟随 ${clientName}，按任务自动选择模型，请求原样发送给 302.AI。`,
-                    })}
+                    {isCustomEndpoint
+                      ? t("ai302.modelStrategyFollowCustom", {
+                          client: clientName,
+                          defaultValue: `自动路由：跟随 ${clientName}，按任务自动选择模型，请求原样发送给当前接口。`,
+                        })
+                      : t("ai302.modelStrategyFollow", {
+                          client: clientName,
+                          defaultValue: `自动路由：跟随 ${clientName}，按任务自动选择模型，请求原样发送给 302.AI。`,
+                        })}
                   </p>
                 ) : (
                   <div className="space-y-1.5">
@@ -295,12 +396,16 @@ export function Ai302KeyDialog({
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-2 rounded-md bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
-              <div className="flex items-start justify-between gap-4">
-                <span>{t("ai302.endpoint", { defaultValue: "请求地址" })}</span>
-                <span className="break-all text-right font-mono text-foreground">
-                  {baseUrl}
-                </span>
-              </div>
+              {!isCustomEndpoint && (
+                <div className="flex items-start justify-between gap-4">
+                  <span>
+                    {t("ai302.endpoint", { defaultValue: "请求地址" })}
+                  </span>
+                  <span className="break-all text-right font-mono text-foreground">
+                    {baseUrl}
+                  </span>
+                </div>
+              )}
               <p className="leading-relaxed">
                 {t("ai302.diagnosisHint", {
                   defaultValue:
@@ -336,7 +441,11 @@ export function Ai302KeyDialog({
           </Button>
           <Button
             onClick={() => void handleSave()}
-            disabled={isSubmitting || !apiKey.trim()}
+            disabled={
+              isSubmitting ||
+              !apiKey.trim() ||
+              (isCustomEndpoint && !baseUrlValid)
+            }
           >
             <Save className="h-4 w-4 mr-2" />
             {t("common.save")}

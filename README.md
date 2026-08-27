@@ -1,6 +1,6 @@
 <div align="center">
 
-# 302 CC Switch
+# 302 Switch
 
 ### Provider switcher for Claude Code, Claude Desktop, Codex, Gemini CLI, OpenCode, OpenClaw & Hermes Agent — the [302.AI](https://302.ai) edition
 
@@ -8,7 +8,7 @@ English | [中文](README_ZH.md) | [Changelog](CHANGELOG.md)
 
 </div>
 
-302 CC Switch is built on [cc-switch](https://github.com/farion1231/cc-switch) (MIT), the excellent open-source provider switcher. It's the same full-featured app, **pre-configured for 302.AI users**: instead of a blank slate, you get 302.AI as a built-in provider for every supported tool, plus the official endpoints. No hunting for API base URLs, no guessing at config formats — paste your 302.AI key, pick a tool, and you're connected. Newcomer-friendly by default, fully open to custom providers if you need them.
+302 Switch is built on [cc-switch](https://github.com/farion1231/cc-switch) (MIT), the excellent open-source provider switcher. It's the same full-featured app, **pre-configured for 302.AI users**: instead of a blank slate, you get 302.AI as a built-in provider for every supported tool, plus the official endpoints. No hunting for API base URLs, no guessing at config formats — paste your 302.AI key, pick a tool, and you're connected. Newcomer-friendly by default, fully open to custom providers if you need them.
 
 ## Download
 

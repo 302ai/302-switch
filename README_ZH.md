@@ -1,6 +1,6 @@
 <div align="center">
 
-# 302 CC Switch
+# 302 Switch
 
 ### Claude Code / Claude Desktop / Codex / Gemini CLI / OpenCode / OpenClaw / Hermes Agent 供应商切换器 — [302.AI](https://302.ai) 版
 
@@ -8,7 +8,7 @@
 
 </div>
 
-302 CC Switch 基于优秀的开源项目 [cc-switch](https://github.com/farion1231/cc-switch)（MIT）构建。功能与原版完全一致，但**为 302.AI 用户预先配置好了一切**：不用面对空白配置页，302.AI 已作为内置供应商覆盖所有支持的工具，官方端点也一并保留。不用查 API 地址、不用猜配置格式——填入 302.AI Key，选择工具，即刻连通。对新手默认友好，需要自定义供应商也完全开放。
+302 Switch 基于优秀的开源项目 [cc-switch](https://github.com/farion1231/cc-switch)（MIT）构建。功能与原版完全一致，但**为 302.AI 用户预先配置好了一切**：不用面对空白配置页，302.AI 已作为内置供应商覆盖所有支持的工具，官方端点也一并保留。不用查 API 地址、不用猜配置格式——填入 302.AI Key，选择工具，即刻连通。对新手默认友好，需要自定义供应商也完全开放。
 
 ## 下载
 

@@ -2,7 +2,7 @@ use crate::error::AppError;
 use auto_launch::{AutoLaunch, AutoLaunchBuilder};
 
 /// 获取 macOS 上的 .app bundle 路径
-/// 将 `/path/to/302 CC Switch.app/Contents/MacOS/302 CC Switch` 转换为 `/path/to/302 CC Switch.app`
+/// 将 `/path/to/302 Switch.app/Contents/MacOS/302 Switch` 转换为 `/path/to/302 Switch.app`
 #[cfg(target_os = "macos")]
 fn get_macos_app_bundle_path(exe_path: &std::path::Path) -> Option<std::path::PathBuf> {
     let path_str = exe_path.to_string_lossy();
@@ -15,9 +15,13 @@ fn get_macos_app_bundle_path(exe_path: &std::path::Path) -> Option<std::path::Pa
     }
 }
 
-/// 初始化 AutoLaunch 实例
-fn get_auto_launch() -> Result<AutoLaunch, AppError> {
-    let app_name = "302 CC Switch";
+const APP_NAME: &str = "302 Switch";
+
+/// 改名前（302 Switch）注册的开机自启项名称。仅用于升级后一次性清理，
+/// 避免旧登录项残留导致「开关显示关闭，但系统仍在自启旧版」的错觉。
+const LEGACY_APP_NAME: &str = "302 Switch";
+
+fn get_auto_launch_named(app_name: &str) -> Result<AutoLaunch, AppError> {
     let exe_path =
         std::env::current_exe().map_err(|e| AppError::Message(format!("无法获取应用路径: {e}")))?;
 
@@ -38,6 +42,23 @@ fn get_auto_launch() -> Result<AutoLaunch, AppError> {
         .map_err(|e| AppError::Message(format!("创建 AutoLaunch 失败: {e}")))?;
 
     Ok(auto_launch)
+}
+
+fn get_auto_launch() -> Result<AutoLaunch, AppError> {
+    get_auto_launch_named(APP_NAME)
+}
+
+/// 升级后一次性清理：如果旧名字（302 Switch）下还有开机自启登录项，关掉它。
+/// 不然用户看到设置里开关是关的，系统却还在悄悄用旧版路径自启。
+/// 全程 best-effort——旧登录项本就不存在时会报错，直接忽略即可。
+pub fn cleanup_legacy_auto_launch() {
+    let Ok(legacy) = get_auto_launch_named(LEGACY_APP_NAME) else {
+        return;
+    };
+    if legacy.is_enabled().unwrap_or(false) {
+        let _ = legacy.disable();
+        log::info!("已清理改名前（302 Switch）遗留的开机自启项");
+    }
 }
 
 /// 启用开机自启
@@ -77,11 +98,11 @@ mod tests {
     #[test]
     fn test_get_macos_app_bundle_path_valid() {
         let exe_path =
-            std::path::Path::new("/Applications/302 CC Switch.app/Contents/MacOS/302 CC Switch");
+            std::path::Path::new("/Applications/302 Switch.app/Contents/MacOS/302 Switch");
         let result = get_macos_app_bundle_path(exe_path);
         assert_eq!(
             result,
-            Some(std::path::PathBuf::from("/Applications/302 CC Switch.app"))
+            Some(std::path::PathBuf::from("/Applications/302 Switch.app"))
         );
     }
 
@@ -89,13 +110,13 @@ mod tests {
     #[test]
     fn test_get_macos_app_bundle_path_with_spaces() {
         let exe_path = std::path::Path::new(
-            "/Users/test/My Apps/302 CC Switch.app/Contents/MacOS/302 CC Switch",
+            "/Users/test/My Apps/302 Switch.app/Contents/MacOS/302 Switch",
         );
         let result = get_macos_app_bundle_path(exe_path);
         assert_eq!(
             result,
             Some(std::path::PathBuf::from(
-                "/Users/test/My Apps/302 CC Switch.app"
+                "/Users/test/My Apps/302 Switch.app"
             ))
         );
     }

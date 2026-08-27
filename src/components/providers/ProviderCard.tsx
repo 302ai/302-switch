@@ -16,7 +16,12 @@ import CopilotQuotaFooter from "@/components/CopilotQuotaFooter";
 import CodexOauthQuotaFooter from "@/components/CodexOauthQuotaFooter";
 import { PROVIDER_TYPES, TEMPLATE_TYPES } from "@/config/constants";
 import { isHermesReadOnlyProvider } from "@/config/hermesProviderPresets";
-import { getAi302ModelStrategy, isAi302SeedProvider } from "@/config/ai302";
+import {
+  getAi302ModelStrategy,
+  isAi302CustomEndpoint,
+  isAi302SeedProvider,
+  readAi302BaseUrl,
+} from "@/config/ai302";
 import { ProviderHealthBadge } from "@/components/providers/ProviderHealthBadge";
 import { FailoverPriorityBadge } from "@/components/providers/FailoverPriorityBadge";
 import {
@@ -228,6 +233,20 @@ export function ProviderCard({
             provider.settingsConfig as Record<string, unknown>,
           )
         : null,
+    [appId, isAi302Seed, provider.settingsConfig],
+  );
+  // 企业版复用 302.AI 种子槽位改写地址，"原样发送给 302.AI" 这句提示对着自定义
+  // 接口（比如填了 OpenRouter）就说错了对象，得按实际地址判断措辞。
+  const ai302IsCustomEndpoint = useMemo(
+    () =>
+      isAi302Seed
+        ? isAi302CustomEndpoint(
+            readAi302BaseUrl(
+              appId,
+              provider.settingsConfig as Record<string, unknown>,
+            ),
+          )
+        : false,
     [appId, isAi302Seed, provider.settingsConfig],
   );
   const codexNeedsRouting = useMemo(() => {
@@ -479,10 +498,15 @@ export function ProviderCard({
                 className="flex max-w-full items-center gap-1.5 text-xs text-muted-foreground"
                 title={
                   ai302ModelStrategy.mode === "follow"
-                    ? t("ai302.modelStrategyFollowShort", {
-                        defaultValue:
-                          "自动路由：客户端按任务自动选择模型，原样发送给 302.AI",
-                      })
+                    ? ai302IsCustomEndpoint
+                      ? t("ai302.modelStrategyFollowShortCustom", {
+                          defaultValue:
+                            "自动路由：客户端按任务自动选择模型，原样发送给当前接口",
+                        })
+                      : t("ai302.modelStrategyFollowShort", {
+                          defaultValue:
+                            "自动路由：客户端按任务自动选择模型，原样发送给 302.AI",
+                        })
                     : ai302ModelStrategy.mappings
                         .map((item) => `${item.role}: ${item.model}`)
                         .join(", ")

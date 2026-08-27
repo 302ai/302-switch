@@ -13,7 +13,7 @@ use crate::provider::{ClaudeDesktopMode, Provider};
 
 // Keep this separate from upstream; never remove an unknown/legacy profile automatically.
 pub const PROFILE_ID: &str = "302cc302-0000-4000-8302-000000030221";
-pub const PROFILE_NAME: &str = "302 CC Switch";
+pub const PROFILE_NAME: &str = "302 Switch";
 
 #[cfg(any(target_os = "macos", windows, test))]
 const CONFIG_FILE: &str = "claude_desktop_config.json";

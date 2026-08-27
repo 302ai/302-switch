@@ -1,6 +1,6 @@
 # Flatpak Build Guide
 
-This directory contains the Flatpak manifest (`com.ai302.ccswitch`) for 302 CC Switch, used to convert the generated `.deb` artifact into an installable `.flatpak` package via CI or local builds.
+This directory contains the Flatpak manifest (`com.ai302.ccswitch`) for 302 Switch, used to convert the generated `.deb` artifact into an installable `.flatpak` package via CI or local builds.
 
 ## Dependencies
 

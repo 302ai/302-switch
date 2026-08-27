@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// 302 CC Switch 独立默认端口，避免与上游 CC Switch 的 15721 冲突。
+/// 302 Switch 独立默认端口，避免与上游 CC Switch 的 15721 冲突。
 pub const DEFAULT_PROXY_PORT: u16 = 30221;
 
 /// 代理服务器配置

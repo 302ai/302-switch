@@ -10,18 +10,94 @@ const AI302_SEED_PREFIX = "ai302-";
 // 用户领取 / 查看 API Key 的入口页（302.AI 控制台）
 export const AI302_API_KEY_URL = "https://dash.302.ai/apis/list";
 
-// 302 聚合接口根地址（种子配置的默认值，验证 Key 时兜底用）
+// 302 聚合接口根地址（海外／国内两个标准节点，种子配置的默认值，验证 Key 时兜底用）
 export const AI302_API_BASE_URL = "https://api.302.ai";
+export const AI302_API_BASE_URL_CN = "https://api.302ai.cn";
 
 export const AI302_ONBOARDING_APPS = ["claude", "codex", "gemini"] as const;
 
 export type Ai302OnboardingApp = (typeof AI302_ONBOARDING_APPS)[number];
 
-export const AI302_SEED_IDS: Record<Ai302OnboardingApp, string> = {
+/** 公共版两个区域，对应后端预置的两套种子。企业版（私有部署）复用海外槽位改写地址。 */
+export type Ai302Region = "cn" | "global";
+
+export const AI302_SEED_IDS_GLOBAL: Record<Ai302OnboardingApp, string> = {
+  claude: "ai302-claude",
+  codex: "ai302-codex",
+  gemini: "ai302-gemini",
+};
+
+export const AI302_SEED_IDS_CN: Record<Ai302OnboardingApp, string> = {
   claude: "ai302-cn-claude",
   codex: "ai302-cn-codex",
   gemini: "ai302-cn-gemini",
 };
+
+export function getAi302SeedId(
+  appId: Ai302OnboardingApp,
+  region: Ai302Region,
+): string {
+  return region === "cn"
+    ? AI302_SEED_IDS_CN[appId]
+    : AI302_SEED_IDS_GLOBAL[appId];
+}
+
+export function getAi302RegionBaseUrl(region: Ai302Region): string {
+  return region === "cn" ? AI302_API_BASE_URL_CN : AI302_API_BASE_URL;
+}
+
+// 已知的 302.AI 官方域名——用来判断某个 provider 当前挂的是标准公共节点，
+// 还是被 onboarding/编辑框改写过的企业私有部署地址。
+const AI302_KNOWN_HOSTS = new Set(["api.302.ai", "api.302ai.cn"]);
+
+export function isAi302CustomEndpoint(baseUrl: string): boolean {
+  try {
+    return !AI302_KNOWN_HOSTS.has(new URL(baseUrl).host);
+  } catch {
+    // 解析失败（用户还没填完）也当作自定义，UI 走可编辑分支更安全
+    return true;
+  }
+}
+
+/** 去掉尾部斜杠和用户误粘贴的 /v1，得到统一的"根地址"，后续按各 app 的形状拼接。 */
+export function normalizeAi302RootUrl(input: string): string {
+  return input.trim().replace(/\/+$/, "").replace(/\/v1$/i, "");
+}
+
+export function isValidAi302BaseUrl(input: string): boolean {
+  try {
+    const url = new URL(input.trim());
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+// 企业版填的地址不一定是 302.AI——填了自己的 base URL 就有可能是任何 OpenAI
+// 兼容中转商。这里只覆盖测试/常见的几个知名域名，识别不到就不瞎猜，直接
+// 回落到不带品牌的通用 "API Key"，好过硬贴一个大概率错的 "302.AI"。
+const KNOWN_API_HOSTS: Record<string, string> = {
+  "openrouter.ai": "OpenRouter",
+  "api.openai.com": "OpenAI",
+  "api.anthropic.com": "Anthropic",
+  "api.deepseek.com": "DeepSeek",
+  "api.moonshot.cn": "Moonshot",
+  "api.groq.com": "Groq",
+  "api.together.xyz": "Together AI",
+};
+
+export function detectAi302BrandName(root: string): string | null {
+  try {
+    return KNOWN_API_HOSTS[new URL(root).host] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function detectAi302ApiKeyLabel(root: string): string {
+  const brand = detectAi302BrandName(root);
+  return brand ? `${brand} API Key` : "API Key";
+}
 
 export interface Ai302ModelMapping {
   role: "sonnet" | "opus" | "fable" | "haiku" | "subagent" | "default";
@@ -97,6 +173,41 @@ export function writeAi302ApiKey(
   }
   const field = appId === "gemini" ? "GEMINI_API_KEY" : "ANTHROPIC_API_KEY";
   return { ...config, env: { ...env, [field]: key } };
+}
+
+/**
+ * 把一个"根地址"（如 https://your-company.302.ai）按各 app 的配置形状写入。
+ * 镜像 readAi302BaseUrl 的分支结构——Codex 拼 /v1 到 TOML 里的 base_url，
+ * Claude/Gemini 系直接写根域名，其余几家在 /v1 层接入。
+ */
+export function writeAi302BaseUrl(
+  appId: AppId,
+  config: Record<string, unknown>,
+  baseUrl: string,
+): Record<string, unknown> {
+  const root = normalizeAi302RootUrl(baseUrl);
+  if (appId === "opencode") {
+    const options = (config.options ?? {}) as Record<string, unknown>;
+    return { ...config, options: { ...options, baseURL: `${root}/v1` } };
+  }
+  if (appId === "openclaw") {
+    return { ...config, baseUrl: root };
+  }
+  if (appId === "hermes") {
+    return { ...config, base_url: `${root}/v1` };
+  }
+  if (appId === "codex") {
+    const toml = typeof config.config === "string" ? config.config : "";
+    const nextToml = toml.replace(
+      /^(\s*base_url\s*=\s*)["'][^"']*["']/m,
+      `$1"${root}/v1"`,
+    );
+    return { ...config, config: nextToml };
+  }
+  const env = (config.env ?? {}) as Record<string, unknown>;
+  const field =
+    appId === "gemini" ? "GOOGLE_GEMINI_BASE_URL" : "ANTHROPIC_BASE_URL";
+  return { ...config, env: { ...env, [field]: root } };
 }
 
 export function readAi302BaseUrl(

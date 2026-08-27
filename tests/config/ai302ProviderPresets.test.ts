@@ -6,7 +6,7 @@ import { claudeDesktopProviderPresets } from "@/config/claudeDesktopProviderPres
 import { opencodeProviderPresets } from "@/config/opencodeProviderPresets";
 import { openclawProviderPresets } from "@/config/openclawProviderPresets";
 import { hermesProviderPresets } from "@/config/hermesProviderPresets";
-import { AI302_SEED_IDS } from "@/config/ai302";
+import { AI302_SEED_IDS_CN } from "@/config/ai302";
 
 // 国内、海外 302.AI 节点必须是可辨认、可独立选择的预设。
 
@@ -26,7 +26,7 @@ describe("302.AI presets across apps", () => {
     expect(p.apiKeyField).toBe("ANTHROPIC_API_KEY");
     // 国内节点作为测速候选
     expect(p.endpointCandidates).toContain("https://api.302ai.cn");
-    expect(AI302_SEED_IDS.claude).toBe("ai302-cn-claude");
+    expect(AI302_SEED_IDS_CN.claude).toBe("ai302-cn-claude");
   });
 
   it("Codex: official + 302.AI + OpenAI API (direct escape hatch)", () => {
@@ -50,7 +50,7 @@ describe("302.AI presets across apps", () => {
     );
     expect(p.apiFormat).toBe("openai_responses");
     expect(p.auth).toHaveProperty("OPENAI_API_KEY", "");
-    expect(AI302_SEED_IDS.codex).toBe("ai302-cn-codex");
+    expect(AI302_SEED_IDS_CN.codex).toBe("ai302-cn-codex");
 
     const direct = codexProviderPresets.find((x) => x.name === "OpenAI API")!;
     expect(direct.config).toContain('base_url = "https://api.openai.com/v1"');
@@ -68,7 +68,7 @@ describe("302.AI presets across apps", () => {
     const p = geminiProviderPresets.find((x) => x.name === "302.AI")!;
     expect(p.baseURL).toBe("https://api.302.ai");
     expect((p.settingsConfig as any).env).toHaveProperty("GEMINI_API_KEY", "");
-    expect(AI302_SEED_IDS.gemini).toBe("ai302-cn-gemini");
+    expect(AI302_SEED_IDS_CN.gemini).toBe("ai302-cn-gemini");
   });
 
   it("Claude Desktop: official + 302.AI only, passthrough routes", () => {

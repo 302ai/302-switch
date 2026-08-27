@@ -4,11 +4,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ArrowRight,
+  Building2,
   Check,
   CheckCircle2,
   ChevronDown,
   CircleAlert,
+  Cloud,
   ExternalLink,
+  Globe,
   KeyRound,
   Loader2,
   RefreshCw,
@@ -42,15 +45,20 @@ import { providersApi, settingsApi } from "@/lib/api";
 import { fetchModelsForConfig } from "@/lib/api/model-fetch";
 import { streamCheckProvider } from "@/lib/api/model-test";
 import {
-  AI302_API_BASE_URL,
   AI302_API_KEY_URL,
   AI302_ONBOARDING_APPS,
-  AI302_SEED_IDS,
   type Ai302OnboardingApp,
+  type Ai302Region,
+  detectAi302ApiKeyLabel,
+  detectAi302BrandName,
   getAi302ModelStrategy,
+  getAi302RegionBaseUrl,
+  getAi302SeedId,
+  isValidAi302BaseUrl,
+  normalizeAi302RootUrl,
   readAi302ApiKey,
-  readAi302BaseUrl,
   writeAi302ApiKey,
+  writeAi302BaseUrl,
 } from "@/config/ai302";
 import { codexProviderPresets } from "@/config/codexProviderPresets";
 import { geminiProviderPresets } from "@/config/geminiProviderPresets";
@@ -141,14 +149,45 @@ function ai302OnboardingDefaultModel(appId: Ai302OnboardingApp): string {
   return "";
 }
 
-function ai302OnboardingBaseUrl(appId: Ai302OnboardingApp): string {
-  if (appId === "codex" && AI302_CODEX_PRESET) {
-    return readAi302BaseUrl("codex", {
-      auth: AI302_CODEX_PRESET.auth,
-      config: AI302_CODEX_PRESET.config,
-    });
+// Codex 的 302.AI 接口地址在 TOML 里带 /v1 后缀，Claude/Gemini 直接用根域名——
+// 用来在"技术详情"里如实展示写入内容，不管当前选的是国内/海外/企业自定义地址。
+function ai302DisplayBaseUrl(appId: Ai302OnboardingApp, root: string): string {
+  return appId === "codex" ? `${root}/v1` : root;
+}
+
+// 用系统时区猜一个默认接入节点，猜错了用户自己在下一行切换即可，
+// 目标只是让大多数人 0 次点击就落在对的选项上。
+function guessDefaultRegion(): Ai302Region {
+  try {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (
+      timeZone === "Asia/Shanghai" ||
+      timeZone === "Asia/Chongqing" ||
+      timeZone === "Asia/Urumqi" ||
+      timeZone === "Asia/Harbin"
+    ) {
+      return "cn";
+    }
+  } catch {
+    // Intl 不可用时（几乎不会发生）退回海外默认值
   }
-  return AI302_API_BASE_URL;
+  return "global";
+}
+
+// 企业版复用海外槽位改写地址，provider 名字也一起改，方便用户以后在供应商卡片上
+// 认出"这是我司自己的部署"，而不是误以为还连着 302.AI 公共接口。
+function enterpriseProviderLabel(root: string): string {
+  try {
+    return `302.AI（企业版 · ${new URL(root).host}）`;
+  } catch {
+    return "302.AI（企业版）";
+  }
+}
+
+// 公共版的标准名字，和后端种子（providers_seed.rs）里写死的一致——
+// 切回公共版时要用它覆盖掉可能残留的企业版名字，不能假设 provider.name 还是原样。
+function ai302RegionProviderLabel(region: Ai302Region): string {
+  return region === "cn" ? "302.AI（国内）" : "302.AI（海外）";
 }
 
 function applyClaudeModelMode(
@@ -184,6 +223,9 @@ export function FirstRunNoticeDialog() {
   const isOpen = settings != null && settings.firstRunNoticeConfirmed !== true;
 
   const [step, setStep] = useState(0);
+  const [edition, setEdition] = useState<"public" | "enterprise">("public");
+  const [region, setRegion] = useState<Ai302Region>(guessDefaultRegion);
+  const [enterpriseUrl, setEnterpriseUrl] = useState("");
   const [tools, setTools] = useState(INITIAL_TOOLS);
   const [selection, setSelection] = useState(INITIAL_SELECTION);
   const [detectionStarted, setDetectionStarted] = useState(false);
@@ -208,8 +250,31 @@ export function FirstRunNoticeDialog() {
     modelMode === "follow" ||
     Object.values(fixedModels).some((model) => model.trim());
 
+  const enterpriseUrlTrimmed = enterpriseUrl.trim();
+  const enterpriseUrlValid =
+    enterpriseUrlTrimmed !== "" && isValidAi302BaseUrl(enterpriseUrlTrimmed);
+
+  // 当前生效的根地址：公共版按区域取标准节点，企业版取用户自己填的地址。
+  const resolvedBaseUrlRoot = useMemo(
+    () =>
+      edition === "enterprise"
+        ? normalizeAi302RootUrl(enterpriseUrl)
+        : getAi302RegionBaseUrl(region),
+    [edition, region, enterpriseUrl],
+  );
+
+  // 地址一变（改企业地址、切国内/海外），之前"验证通过"的结论就不作数了——
+  // 否则从 step3 退回 step1 改完地址再前进，会拿着旧的 verifyState==="ok" 跳过重新验证。
+  useEffect(() => {
+    setVerifyState("idle");
+    setVerifyError("");
+  }, [resolvedBaseUrlRoot]);
+
   const resetWizardState = useCallback(() => {
     setStep(0);
+    setEdition("public");
+    setRegion(guessDefaultRegion());
+    setEnterpriseUrl("");
     setTools(INITIAL_TOOLS);
     setSelection(INITIAL_SELECTION);
     setDetectionStarted(false);
@@ -285,7 +350,7 @@ export function FirstRunNoticeDialog() {
   }, []);
 
   useEffect(() => {
-    if (isOpen && step === 1 && !detectionStarted) void detectTools();
+    if (isOpen && step === 2 && !detectionStarted) void detectTools();
   }, [detectTools, detectionStarted, isOpen, step]);
 
   const verifyKey = useCallback(async (): Promise<boolean> => {
@@ -300,7 +365,7 @@ export function FirstRunNoticeDialog() {
     setVerifyState("checking");
     setVerifyError("");
     try {
-      const models = await fetchModelsForConfig(AI302_API_BASE_URL, key);
+      const models = await fetchModelsForConfig(resolvedBaseUrlRoot, key);
       setModelCount(models.length);
       setVerifyState("ok");
       return true;
@@ -312,20 +377,28 @@ export function FirstRunNoticeDialog() {
           ? t("onboarding.keyInvalid", {
               defaultValue: "Key 无效或没有访问权限",
             })
-          : t("onboarding.keyNetworkError", {
-              defaultValue: "无法连接 302.AI，请检查网络后重试",
-            }),
+          : edition === "enterprise"
+            ? t("onboarding.keyNetworkErrorEnterprise", {
+                defaultValue: "无法连接该地址，请检查 Base URL 是否正确",
+              })
+            : t("onboarding.keyNetworkError", {
+                defaultValue: "无法连接 302.AI，请检查网络后重试",
+              }),
       );
       setVerifyState("error");
       return false;
     }
-  }, [apiKey, t]);
+  }, [apiKey, edition, resolvedBaseUrlRoot, t]);
 
   const configureApp = useCallback(
     async (appId: Ai302OnboardingApp): Promise<ConfigureResult> => {
       try {
+        const seedId = getAi302SeedId(
+          appId,
+          edition === "enterprise" ? "global" : region,
+        );
         const providers = await providersApi.getAll(appId);
-        const provider = providers[AI302_SEED_IDS[appId]];
+        const provider = providers[seedId];
         if (!provider) {
           throw new Error(
             t("onboarding.presetMissing", {
@@ -340,6 +413,14 @@ export function FirstRunNoticeDialog() {
           provider.settingsConfig as Record<string, unknown>,
           apiKey.trim(),
         );
+        // 地址、名字、官网链接每次都按当前选择重写——公共版和企业版复用同一个
+        // 种子槽位（企业版落在"海外"槽位上），如果只在切到企业版时才覆盖，
+        // 上一次企业版残留的地址/名字会在切回公共版后原样留着。
+        settingsConfig = writeAi302BaseUrl(
+          appId,
+          settingsConfig,
+          resolvedBaseUrlRoot,
+        );
         if (appId === "claude") {
           settingsConfig = applyClaudeModelMode(
             settingsConfig,
@@ -348,7 +429,15 @@ export function FirstRunNoticeDialog() {
           );
         }
 
-        const updated: Provider = { ...provider, settingsConfig };
+        const updated: Provider = {
+          ...provider,
+          name:
+            edition === "enterprise"
+              ? enterpriseProviderLabel(resolvedBaseUrlRoot)
+              : ai302RegionProviderLabel(region),
+          websiteUrl: resolvedBaseUrlRoot,
+          settingsConfig,
+        };
         await providersApi.update(updated, appId, provider.id);
         await providersApi.switch(provider.id, appId);
 
@@ -369,7 +458,7 @@ export function FirstRunNoticeDialog() {
         };
       }
     },
-    [apiKey, fixedModels, modelMode, t],
+    [apiKey, edition, fixedModels, modelMode, region, resolvedBaseUrlRoot, t],
   );
 
   const configureSelectedApps = useCallback(async () => {
@@ -378,7 +467,7 @@ export function FirstRunNoticeDialog() {
     try {
       const keyOk = verifyState === "ok" ? true : await verifyKey();
       if (!keyOk) {
-        setStep(2);
+        setStep(3);
         return;
       }
       const results = await Promise.all(selectedApps.map(configureApp));
@@ -393,7 +482,7 @@ export function FirstRunNoticeDialog() {
       } catch (error) {
         console.error("[Onboarding] Failed to refresh the tray menu", error);
       }
-      setStep(5);
+      setStep(6);
     } finally {
       setIsConfiguring(false);
     }
@@ -414,8 +503,12 @@ export function FirstRunNoticeDialog() {
       const results = await Promise.all(
         selectedApps.map(async (appId): Promise<ConfigureResult> => {
           try {
+            const seedId = getAi302SeedId(
+              appId,
+              edition === "enterprise" ? "global" : region,
+            );
             const providers = await providersApi.getAll(appId);
-            const provider = providers[AI302_SEED_IDS[appId]];
+            const provider = providers[seedId];
             if (!provider) {
               throw new Error(
                 t("onboarding.presetMissing", {
@@ -439,10 +532,7 @@ export function FirstRunNoticeDialog() {
 
             let reachable = false;
             try {
-              const check = await streamCheckProvider(
-                appId,
-                AI302_SEED_IDS[appId],
-              );
+              const check = await streamCheckProvider(appId, seedId);
               reachable = check.status !== "failed";
             } catch {
               reachable = false;
@@ -466,18 +556,33 @@ export function FirstRunNoticeDialog() {
     } finally {
       setIsDiagnosing(false);
     }
-  }, [apiKey, detectTools, selectedApps, t, verifyKey]);
+  }, [apiKey, detectTools, edition, region, selectedApps, t, verifyKey]);
 
   const goBack = () => setStep((current) => Math.max(0, current - 1));
-  const goNext = () => setStep((current) => Math.min(5, current + 1));
+  const goNext = () => setStep((current) => Math.min(6, current + 1));
   const allConfigured =
     configureResults.length > 0 &&
     configureResults.every((result) => result.success);
 
+  const enterpriseBrand =
+    edition === "enterprise" ? detectAi302BrandName(resolvedBaseUrlRoot) : null;
+  const keyStepTitle =
+    edition === "enterprise"
+      ? enterpriseBrand
+        ? t("onboarding.keyTitleBrand", {
+            brand: enterpriseBrand,
+            defaultValue: `连接你的 ${enterpriseBrand} 账户`,
+          })
+        : t("onboarding.keyTitleEnterprise", {
+            defaultValue: "连接你的接口账户",
+          })
+      : t("onboarding.keyTitle", { defaultValue: "连接你的 302.AI 账户" });
+
   const stepTitle = [
     t("onboarding.introTitle", { defaultValue: "一个入口，管理所有配置" }),
+    t("onboarding.editionTitle", { defaultValue: "选择接入方式" }),
     t("onboarding.detectTitle", { defaultValue: "看看你正在使用哪些工具" }),
-    t("onboarding.keyTitle", { defaultValue: "连接你的 302.AI 账户" }),
+    keyStepTitle,
     t("onboarding.appsTitle", { defaultValue: "选择要接入的客户端" }),
     t("onboarding.modelsTitle", { defaultValue: "确认模型策略" }),
     allConfigured
@@ -505,15 +610,15 @@ export function FirstRunNoticeDialog() {
               <ProviderIcon icon="ai302" name="302.AI" size={24} />
               {stepTitle}
             </DialogTitle>
-            {step > 0 && step < 5 && (
+            {step > 0 && step < 6 && (
               <span className="text-xs tabular-nums text-muted-foreground">
-                {step}/4
+                {step}/5
               </span>
             )}
           </div>
-          {step > 0 && step < 5 && (
-            <div className="grid grid-cols-4 gap-1.5" aria-hidden="true">
-              {[1, 2, 3, 4].map((item) => (
+          {step > 0 && step < 6 && (
+            <div className="grid grid-cols-5 gap-1.5" aria-hidden="true">
+              {[1, 2, 3, 4, 5].map((item) => (
                 <div
                   key={item}
                   className={cn(
@@ -542,7 +647,7 @@ export function FirstRunNoticeDialog() {
                   <DialogDescription className="max-w-[54ch] text-base leading-relaxed">
                     {t("onboarding.introBody", {
                       defaultValue:
-                        "302 CC Switch 统一管理 Claude Code、Codex 和 Gemini CLI 的 API 配置。切换供应商时，原配置会自动保留。",
+                        "302 Switch 统一管理 Claude Code、Codex 和 Gemini CLI 的 API 配置。切换供应商时，原配置会自动保留。",
                     })}
                   </DialogDescription>
                 </div>
@@ -585,6 +690,148 @@ export function FirstRunNoticeDialog() {
           )}
 
           {step === 1 && (
+            <div className="mx-auto max-w-[560px] space-y-5 py-2">
+              <DialogDescription>
+                {t("onboarding.editionBody", {
+                  defaultValue:
+                    "告诉我们你用的是哪种 302.AI 接入方式，其余选项会自动配好。",
+                })}
+              </DialogDescription>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setEdition("public")}
+                  className={cn(
+                    "rounded-lg border p-4 text-left transition-colors",
+                    edition === "public"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:bg-muted/40",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <Cloud className="h-5 w-5 text-primary" />
+                    {edition === "public" && (
+                      <Check className="h-4 w-4 text-primary" />
+                    )}
+                  </div>
+                  <div className="mt-3 text-sm font-medium">
+                    {t("onboarding.editionPublic", { defaultValue: "公共版" })}
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {t("onboarding.editionPublicBody", {
+                      defaultValue:
+                        "使用 302.AI 官方接口，地址已经配好，只需要一把 Key。",
+                    })}
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEdition("enterprise")}
+                  className={cn(
+                    "rounded-lg border p-4 text-left transition-colors",
+                    edition === "enterprise"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:bg-muted/40",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <Building2 className="h-5 w-5 text-primary" />
+                    {edition === "enterprise" && (
+                      <Check className="h-4 w-4 text-primary" />
+                    )}
+                  </div>
+                  <div className="mt-3 text-sm font-medium">
+                    {t("onboarding.editionEnterprise", {
+                      defaultValue: "企业版（私有部署）",
+                    })}
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {t("onboarding.editionEnterpriseBody", {
+                      defaultValue:
+                        "填入你司自己部署的接口地址，其余流程完全一致。",
+                    })}
+                  </p>
+                </button>
+              </div>
+
+              {edition === "public" && (
+                <div className="space-y-2.5 rounded-lg border border-border p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Globe className="h-4 w-4 text-primary" />
+                    {t("onboarding.regionLabel", { defaultValue: "接入节点" })}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRegion("cn")}
+                      className={cn(
+                        "rounded-md border px-3 py-2 text-sm transition-colors",
+                        region === "cn"
+                          ? "border-primary bg-primary/5 font-medium"
+                          : "border-border hover:bg-muted/40",
+                      )}
+                    >
+                      {t("onboarding.regionCn", { defaultValue: "国内" })}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRegion("global")}
+                      className={cn(
+                        "rounded-md border px-3 py-2 text-sm transition-colors",
+                        region === "global"
+                          ? "border-primary bg-primary/5 font-medium"
+                          : "border-border hover:bg-muted/40",
+                      )}
+                    >
+                      {t("onboarding.regionGlobal", { defaultValue: "海外" })}
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {t("onboarding.regionHint", {
+                      defaultValue:
+                        "已根据你的系统时区自动选择，不确定就保持默认。",
+                    })}
+                  </p>
+                </div>
+              )}
+
+              {edition === "enterprise" && (
+                <div className="space-y-2">
+                  <label
+                    htmlFor="onboarding-enterprise-url"
+                    className="block text-sm font-medium text-foreground"
+                  >
+                    {t("onboarding.enterpriseUrlLabel", {
+                      defaultValue: "接口地址（Base URL）",
+                    })}
+                  </label>
+                  <Input
+                    id="onboarding-enterprise-url"
+                    value={enterpriseUrl}
+                    onChange={(event) => setEnterpriseUrl(event.target.value)}
+                    placeholder="https://your-company.302.ai"
+                  />
+                  {enterpriseUrlTrimmed !== "" && !enterpriseUrlValid && (
+                    <p className="text-xs text-destructive">
+                      {t("onboarding.enterpriseUrlInvalid", {
+                        defaultValue:
+                          "地址格式不对，需要以 http:// 或 https:// 开头",
+                      })}
+                    </p>
+                  )}
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {t("onboarding.enterpriseUrlHint", {
+                      defaultValue:
+                        "形如 https://your-company.302.ai，可以在企业版管理后台的「API 设置」里找到。不用加 /v1，我们会按各客户端的要求自动拼接。",
+                    })}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 2 && (
             <div className="space-y-5">
               <DialogDescription>
                 {t("onboarding.detectBody", {
@@ -657,14 +904,39 @@ export function FirstRunNoticeDialog() {
             </div>
           )}
 
-          {step === 2 && (
+          {step === 3 && (
             <div className="mx-auto max-w-[520px] space-y-5 py-4">
               <DialogDescription className="leading-relaxed">
-                {t("onboarding.keyBody", {
-                  defaultValue:
-                    "Key 只保存在本机，并写入你选中的客户端配置。验证不会产生模型调用费用。",
-                })}
+                {edition === "enterprise"
+                  ? t("onboarding.keyBodyEnterprise", {
+                      defaultValue:
+                        "Key 只保存在本机，并写入你选中的客户端配置。",
+                    })
+                  : t("onboarding.keyBody", {
+                      defaultValue:
+                        "Key 只保存在本机，并写入你选中的客户端配置。验证不会产生模型调用费用。",
+                    })}
               </DialogDescription>
+              {edition === "enterprise" && (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 px-3 py-2.5 text-xs">
+                  <span className="min-w-0 truncate text-muted-foreground">
+                    {t("onboarding.enterpriseUrlConfirmLabel", {
+                      defaultValue: "接口地址",
+                    })}
+                    ：
+                    <span className="font-mono text-foreground">
+                      {resolvedBaseUrlRoot}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="flex-shrink-0 text-primary hover:underline"
+                  >
+                    {t("common.edit", { defaultValue: "编辑" })}
+                  </button>
+                </div>
+              )}
               <ApiKeyInput
                 id="onboarding-ai302-key"
                 value={apiKey}
@@ -674,21 +946,33 @@ export function FirstRunNoticeDialog() {
                   setVerifyError("");
                 }}
                 placeholder="sk-..."
-                label="302.AI API Key"
+                label={
+                  edition === "enterprise"
+                    ? detectAi302ApiKeyLabel(resolvedBaseUrlRoot)
+                    : "302.AI API Key"
+                }
               />
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() =>
-                    void settingsApi.openExternal(AI302_API_KEY_URL)
-                  }
-                  className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  {t("onboarding.getKey", {
-                    defaultValue: "前往 302.AI 获取 Key",
-                  })}
-                </button>
+                {edition === "enterprise" ? (
+                  <span className="text-xs text-muted-foreground">
+                    {t("onboarding.enterpriseKeyHint", {
+                      defaultValue: "在企业版管理后台生成 API Key",
+                    })}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void settingsApi.openExternal(AI302_API_KEY_URL)
+                    }
+                    className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    {t("onboarding.getKey", {
+                      defaultValue: "前往 302.AI 获取 Key",
+                    })}
+                  </button>
+                )}
                 <Button
                   type="button"
                   variant="outline"
@@ -723,7 +1007,7 @@ export function FirstRunNoticeDialog() {
             </div>
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <div className="space-y-5">
               <DialogDescription>
                 {t("onboarding.appsBody", {
@@ -785,14 +1069,19 @@ export function FirstRunNoticeDialog() {
             </div>
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <div className="space-y-5">
               <DialogDescription>
                 {selection.claude
-                  ? t("onboarding.modelsBody", {
-                      defaultValue:
-                        "Claude Code 默认把当前选择的模型原样发送给 302.AI。需要锁定版本时，可以设置固定映射。",
-                    })
+                  ? edition === "enterprise"
+                    ? t("onboarding.modelsBodyEnterprise", {
+                        defaultValue:
+                          "Claude Code 默认把当前选择的模型原样发送给你配置的接口。需要锁定版本时，可以设置固定映射。",
+                      })
+                    : t("onboarding.modelsBody", {
+                        defaultValue:
+                          "Claude Code 默认把当前选择的模型原样发送给 302.AI。需要锁定版本时，可以设置固定映射。",
+                      })
                   : t("onboarding.modelsBodyNoClaude", {
                       defaultValue: "确认各客户端将要写入的默认模型。",
                     })}
@@ -958,7 +1247,7 @@ export function FirstRunNoticeDialog() {
                     >
                       <span>{APP_DETAILS[appId].configLabel}</span>
                       <span className="text-right font-mono text-foreground">
-                        {ai302OnboardingBaseUrl(appId)}
+                        {ai302DisplayBaseUrl(appId, resolvedBaseUrlRoot)}
                       </span>
                     </div>
                   ))}
@@ -967,7 +1256,7 @@ export function FirstRunNoticeDialog() {
             </div>
           )}
 
-          {step === 5 && (
+          {step === 6 && (
             <div className="space-y-5">
               <div
                 className={cn(
@@ -985,9 +1274,13 @@ export function FirstRunNoticeDialog() {
                 <div>
                   <div className="text-sm font-medium">
                     {allConfigured
-                      ? t("onboarding.doneSummary", {
-                          defaultValue: "302.AI 已写入并启用",
-                        })
+                      ? edition === "enterprise"
+                        ? t("onboarding.doneSummaryEnterprise", {
+                            defaultValue: "接口配置已写入并启用",
+                          })
+                        : t("onboarding.doneSummary", {
+                            defaultValue: "302.AI 已写入并启用",
+                          })
                       : t("onboarding.partialSummary", {
                           defaultValue: "部分客户端需要处理",
                         })}
@@ -1068,7 +1361,7 @@ export function FirstRunNoticeDialog() {
               <Button variant="ghost" onClick={() => void saveCompletion()}>
                 {t("onboarding.skip", { defaultValue: "暂时跳过" })}
               </Button>
-            ) : step < 5 ? (
+            ) : step < 6 ? (
               <Button variant="ghost" onClick={goBack}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 {t("common.back", { defaultValue: "返回" })}
@@ -1085,6 +1378,14 @@ export function FirstRunNoticeDialog() {
           ) : step === 1 ? (
             <Button
               onClick={goNext}
+              disabled={edition === "enterprise" && !enterpriseUrlValid}
+            >
+              {t("common.next", { defaultValue: "下一步" })}
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          ) : step === 2 ? (
+            <Button
+              onClick={goNext}
               disabled={Object.values(tools).some(
                 (tool) => tool.state === "checking" || tool.state === "idle",
               )}
@@ -1092,7 +1393,7 @@ export function FirstRunNoticeDialog() {
               {t("common.next", { defaultValue: "下一步" })}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
-          ) : step === 2 ? (
+          ) : step === 3 ? (
             <Button
               onClick={() => {
                 if (verifyState === "ok") goNext();
@@ -1103,12 +1404,12 @@ export function FirstRunNoticeDialog() {
               {t("common.next", { defaultValue: "下一步" })}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
-          ) : step === 3 ? (
+          ) : step === 4 ? (
             <Button onClick={goNext} disabled={selectedApps.length === 0}>
               {t("common.next", { defaultValue: "下一步" })}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
-          ) : step === 4 ? (
+          ) : step === 5 ? (
             <Button
               onClick={() => void configureSelectedApps()}
               disabled={isConfiguring || !fixedModeValid}
@@ -1122,7 +1423,7 @@ export function FirstRunNoticeDialog() {
             </Button>
           ) : (
             <Button onClick={() => void saveCompletion()}>
-              {t("onboarding.enterApp", { defaultValue: "进入 302 CC Switch" })}
+              {t("onboarding.enterApp", { defaultValue: "进入 302 Switch" })}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           )}

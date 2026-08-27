@@ -1207,7 +1207,7 @@ function App() {
                         : "text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300",
                     )}
                   >
-                    302 CC Switch
+                    302 Switch
                   </a>
                 </div>
                 <Button
