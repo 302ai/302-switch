@@ -109,9 +109,8 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn test_get_macos_app_bundle_path_with_spaces() {
-        let exe_path = std::path::Path::new(
-            "/Users/test/My Apps/302 Switch.app/Contents/MacOS/302 Switch",
-        );
+        let exe_path =
+            std::path::Path::new("/Users/test/My Apps/302 Switch.app/Contents/MacOS/302 Switch");
         let result = get_macos_app_bundle_path(exe_path);
         assert_eq!(
             result,
