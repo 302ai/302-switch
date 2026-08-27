@@ -186,33 +186,75 @@ jobs:
           fi
           echo "✅ Tauri signing key prepared"
 
-      - name: Import Apple signing certificate
+      - name: Detect macOS signing credentials
         if: runner.os == 'macOS'
         shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
+          MISSING=()
+          for var in APPLE_CERTIFICATE APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!var:-}" ]; then MISSING+=("$var"); fi
+          done
+          if [ ${#MISSING[@]} -eq 0 ]; then
+            echo "✅ 检测到完整的 Apple 签名/公证凭据，启用签名公证流程"
+            echo "APPLE_SIGNING_ENABLED=true" >> "$GITHUB_ENV"
+          else
+            echo "⚠️ 缺少以下 Apple secrets：${MISSING[*]}" >&2
+            echo "   本次 macOS 构建将产出【未签名、未公证】产物（用户需手动绕过 Gatekeeper）。" >&2
+            echo "   补齐上述 secrets 后重新打 tag 即可自动走回签名公证路线。" >&2
+            echo "APPLE_SIGNING_ENABLED=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Import Apple signing certificate
+        if: runner.os == 'macOS' && env.APPLE_SIGNING_ENABLED == 'true'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Fail fast: empty secret means broken config, not unsigned build
+          if [ -z "${APPLE_CERTIFICATE}" ]; then
+            echo "❌ APPLE_CERTIFICATE 为空但签名已启用" >&2
+            exit 1
+          fi
           # Decode .p12 certificate from base64
           CERT_PATH="$RUNNER_TEMP/certificate.p12"
-          printf '%s' "${{ secrets.APPLE_CERTIFICATE }}" | (base64 --decode 2>/dev/null || base64 -D) > "$CERT_PATH"
+          printf '%s' "$APPLE_CERTIFICATE" | (base64 --decode 2>/dev/null || base64 -D) > "$CERT_PATH"
+          CERT_BYTES=$(wc -c < "$CERT_PATH" | tr -d ' ')
+          echo "certificate.p12: ${CERT_BYTES} bytes"
+          if [ "$CERT_BYTES" -lt 100 ]; then
+            echo "❌ 证书解码后仅 ${CERT_BYTES} 字节，APPLE_CERTIFICATE 的 base64 内容不完整" >&2
+            exit 1
+          fi
 
           # Save original default keychain for cleanup
           ORIGINAL_DEFAULT_KEYCHAIN=$(security default-keychain -d user | tr -d '"' | xargs)
           echo "ORIGINAL_DEFAULT_KEYCHAIN=$ORIGINAL_DEFAULT_KEYCHAIN" >> "$GITHUB_ENV"
 
-          # Create temporary keychain
+          # Create temporary keychain (fallback to random password when secret not set)
+          KEYCHAIN_PW="${KEYCHAIN_PASSWORD:-$(openssl rand -hex 32)}"
           KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
-          security create-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" "$KEYCHAIN_PATH"
+          security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security default-keychain -s "$KEYCHAIN_PATH"
-          security unlock-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN_PATH"
 
           # Import certificate
           security import "$CERT_PATH" \
             -k "$KEYCHAIN_PATH" \
-            -P "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
             -T /usr/bin/codesign \
             -T /usr/bin/security
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${{ secrets.KEYCHAIN_PASSWORD }}" "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PW" "$KEYCHAIN_PATH"
 
           # Dynamically resolve signing identity (must be "Developer ID Application")
           IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" \
@@ -239,6 +281,14 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
+          # 签名分支：未启用时清空 Apple 变量，Tauri bundler 会自动跳过 codesign/notarize
+          # （空字符串值可能被 bundler 误当成有效身份，必须 unset）
+          if [ "${APPLE_SIGNING_ENABLED:-false}" != "true" ]; then
+            echo "⚠️ 未启用 Apple 签名公证，产出未签名产物"
+            unset APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID
+          else
+            : "${APPLE_SIGNING_IDENTITY:?APPLE_SIGNING_IDENTITY is required when signing enabled}"
+          fi
           max_attempts=3
           for attempt in $(seq 1 "$max_attempts"); do
             echo "=== macOS build/notarization attempt ${attempt}/${max_attempts} ==="
@@ -304,9 +354,13 @@ jobs:
             exit 1
           fi
 
-          # Staple notarization ticket to .app (Tauri already notarized it)
-          xcrun stapler staple "$APP_PATH"
-          echo "✅ .app stapled"
+          # Staple notarization ticket to .app (signed builds only)
+          if [ "${APPLE_SIGNING_ENABLED:-false}" = "true" ]; then
+            xcrun stapler staple "$APP_PATH"
+            echo "✅ .app stapled"
+          else
+            echo "⚠️ 未启用签名公证，跳过 .app staple"
+          fi
 
           # 1) Collect .tar.gz (updater artifact)
           NEW_TAR_GZ="302-CC-Switch-${VERSION}-macOS.tar.gz"
@@ -320,9 +374,23 @@ jobs:
           echo "macOS zip ready: $NEW_ZIP"
 
           # 3) Create styled DMG with create-dmg (Tauri's built-in DMG styling doesn't work on CI)
-          if [ -z "${APPLE_SIGNING_IDENTITY:-}" ]; then
-            echo "❌ APPLE_SIGNING_IDENTITY is missing before DMG creation" >&2
-            exit 1
+          CREATE_DMG_ARGS=(
+            --volname "302 CC Switch"
+            --background "src-tauri/icons/dmg-background.png"
+            --window-size 660 400
+            --window-pos 200 120
+            --icon-size 80
+            --icon "302 CC Switch.app" 180 220
+            --hide-extension "302 CC Switch.app"
+            --app-drop-link 480 220
+            --no-internet-enable
+          )
+          if [ "${APPLE_SIGNING_ENABLED:-false}" = "true" ]; then
+            if [ -z "${APPLE_SIGNING_IDENTITY:-}" ]; then
+              echo "❌ APPLE_SIGNING_IDENTITY is missing before DMG creation" >&2
+              exit 1
+            fi
+            CREATE_DMG_ARGS+=(--codesign "$APPLE_SIGNING_IDENTITY")
           fi
 
           HOMEBREW_NO_AUTO_UPDATE=1 brew install create-dmg
@@ -332,25 +400,20 @@ jobs:
           mkdir -p "$DMG_STAGE_DIR"
           ditto "$APP_PATH" "$DMG_STAGE_DIR/302 CC Switch.app"
 
-          create-dmg \
-            --volname "302 CC Switch" \
-            --background "src-tauri/icons/dmg-background.png" \
-            --window-size 660 400 \
-            --window-pos 200 120 \
-            --icon-size 80 \
-            --icon "302 CC Switch.app" 180 220 \
-            --hide-extension "302 CC Switch.app" \
-            --app-drop-link 480 220 \
-            --codesign "$APPLE_SIGNING_IDENTITY" \
-            --no-internet-enable \
+          create-dmg "${CREATE_DMG_ARGS[@]}" \
             "release-assets/$NEW_DMG" \
             "$DMG_STAGE_DIR"
 
           rm -rf "$DMG_STAGE_DIR"
           echo "✅ Styled DMG created: $NEW_DMG"
 
+          # 标记本版是否已签名（供 publish 阶段选择 Release 说明文案）
+          if [ "${APPLE_SIGNING_ENABLED:-false}" = "true" ]; then
+            echo "Signed with Developer ID Application certificate" > release-assets/MACOS_SIGNED.txt
+          fi
+
       - name: Notarize macOS DMG
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && env.APPLE_SIGNING_ENABLED == 'true'
         shell: bash
         timeout-minutes: 30
         env:
@@ -396,6 +459,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          if [ "${APPLE_SIGNING_ENABLED:-false}" != "true" ]; then
+            echo "⚠️ 未签名构建：跳过 codesign/spctl/stapler 验证，仅核对产物清单"
+            ls -la release-assets
+            exit 0
+          fi
 
           # Verify .app (from Tauri bundle)
           APP_PATH=""
@@ -604,31 +673,56 @@ jobs:
           set -euo pipefail
           ls -la release-assets
 
+      - name: Compose release body
+        id: body
+        shell: bash
+        run: |
+          set -euo pipefail
+          BODY_FILE="$RUNNER_TEMP/release-body.md"
+          cat > "$BODY_FILE" <<'BODY_HEADER'
+          ## 302 CC Switch ${{ github.ref_name }}
+
+          🌐 **Only Official Website / 唯一官方网站 / 唯一の公式サイト**: [ccswitch.io](https://ccswitch.io)
+
+          Claude Code 供应商切换工具
+
+          ### 下载
+
+          - **macOS**: `302-CC-Switch-${{ github.ref_name }}-macOS.dmg`（推荐）或 `302-CC-Switch-${{ github.ref_name }}-macOS.zip`（解压即用）
+          - **Windows (x86_64)**: `302-CC-Switch-${{ github.ref_name }}-Windows.msi`（安装版）或 `302-CC-Switch-${{ github.ref_name }}-Windows-Portable.zip`（绿色版）
+          - **Windows (ARM64)**: `302-CC-Switch-${{ github.ref_name }}-Windows-arm64.msi`（安装版）或 `302-CC-Switch-${{ github.ref_name }}-Windows-arm64-Portable.zip`（绿色版）
+          - **Linux (x86_64)**: `302-CC-Switch-${{ github.ref_name }}-Linux-x86_64.AppImage` / `.deb` / `.rpm`
+          - **Linux (ARM64)**: `302-CC-Switch-${{ github.ref_name }}-Linux-arm64.AppImage` / `.deb` / `.rpm`
+
+          > `.tar.gz` 为 Tauri updater 自动更新专用，无需手动下载。
+
+          ---
+          BODY_HEADER
+
+          # 按 macOS job 写入的标记自动切换文案
+          if compgen -G "release-assets/MACOS_SIGNED*" >/dev/null; then
+            echo "✅ macOS 版本已通过 Apple 代码签名和公证，可直接安装使用。" >> "$BODY_FILE"
+            rm -f release-assets/MACOS_SIGNED*
+          else
+            cat >> "$BODY_FILE" <<'FOOTER'
+          ⚠️ **本次 macOS 版本未经 Apple 代码签名与公证**。首次打开如被 Gatekeeper 拦截，任选其一：
+
+          ```bash
+          xattr -rd com.apple.quarantine "/Applications/302 CC Switch.app"
+          ```
+
+          或前往「系统设置 → 隐私与安全性」，点击“仍要打开”。
+          FOOTER
+          fi
+          echo "body=$BODY_FILE" >> "$GITHUB_OUTPUT"
+
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: 302 CC Switch ${{ github.ref_name }}
           prerelease: true
-          body: |
-            ## 302 CC Switch ${{ github.ref_name }}
-
-            🌐 **Only Official Website / 唯一官方网站 / 唯一の公式サイト**: [ccswitch.io](https://ccswitch.io)
-
-            Claude Code 供应商切换工具
-
-            ### 下载
-
-            - **macOS**: `302-CC-Switch-${{ github.ref_name }}-macOS.dmg`（推荐）或 `302-CC-Switch-${{ github.ref_name }}-macOS.zip`（解压即用）
-            - **Windows (x86_64)**: `302-CC-Switch-${{ github.ref_name }}-Windows.msi`（安装版）或 `302-CC-Switch-${{ github.ref_name }}-Windows-Portable.zip`（绿色版）
-            - **Windows (ARM64)**: `302-CC-Switch-${{ github.ref_name }}-Windows-arm64.msi`（安装版）或 `302-CC-Switch-${{ github.ref_name }}-Windows-arm64-Portable.zip`（绿色版）
-            - **Linux (x86_64)**: `302-CC-Switch-${{ github.ref_name }}-Linux-x86_64.AppImage` / `.deb` / `.rpm`
-            - **Linux (ARM64)**: `302-CC-Switch-${{ github.ref_name }}-Linux-arm64.AppImage` / `.deb` / `.rpm`
-
-            > `.tar.gz` 为 Tauri updater 自动更新专用，无需手动下载。
-
-            ---
-            macOS 版本已通过 Apple 代码签名和公证，可直接安装使用。
+          body_path: ${{ steps.body.outputs.body }}
           files: release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
