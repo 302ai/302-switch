@@ -54,7 +54,10 @@ pub struct ForwardResult {
 
 pub struct ForwardError {
     pub error: ProxyError,
-    pub provider: Option<Provider>,
+    // Provider 有 ~1.3KB，直接内联会把整个 Result 的 Err 撑大（clippy::result_large_err）。
+    // 装箱后 ForwardError 只剩一个指针，且仅在真的带上 provider 时才堆分配——
+    // 反正走到这里已经是错误路径，一次分配无所谓。
+    pub provider: Option<Box<Provider>>,
 }
 
 /// 活跃连接 RAII guard
@@ -315,7 +318,7 @@ impl RequestForwarder {
         }
         Some(ForwardError {
             error: retry_err,
-            provider: Some(provider.clone()),
+            provider: Some(Box::new(provider.clone())),
         })
     }
 
@@ -678,7 +681,7 @@ impl RequestForwarder {
                                 }
                                 return Err(ForwardError {
                                     error: e,
-                                    provider: Some(provider.clone()),
+                                    provider: Some(Box::new(provider.clone())),
                                 });
                             }
 
@@ -830,7 +833,7 @@ impl RequestForwarder {
                                 }
                                 return Err(ForwardError {
                                     error: e,
-                                    provider: Some(provider.clone()),
+                                    provider: Some(Box::new(provider.clone())),
                                 });
                             }
 
@@ -856,7 +859,7 @@ impl RequestForwarder {
                                 }
                                 return Err(ForwardError {
                                     error: e,
-                                    provider: Some(provider.clone()),
+                                    provider: Some(Box::new(provider.clone())),
                                 });
                             }
 
@@ -978,7 +981,7 @@ impl RequestForwarder {
                         }
                         return Err(ForwardError {
                             error: e,
-                            provider: Some(provider.clone()),
+                            provider: Some(Box::new(provider.clone())),
                         });
                     }
 
@@ -1041,7 +1044,7 @@ impl RequestForwarder {
                             }
                             return Err(ForwardError {
                                 error: e,
-                                provider: Some(provider.clone()),
+                                provider: Some(Box::new(provider.clone())),
                             });
                         }
                     }
@@ -1085,7 +1088,7 @@ impl RequestForwarder {
 
         Err(ForwardError {
             error: last_error.unwrap_or(ProxyError::MaxRetriesExceeded),
-            provider: last_provider,
+            provider: last_provider.map(Box::new),
         })
     }
 

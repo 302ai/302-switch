@@ -61,8 +61,11 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        # 固定到 rust-toolchain.toml 里钉的 1.95：@stable 会设 RUSTUP_TOOLCHAIN=stable，
+        # 优先级盖过 rust-toolchain.toml，导致 CI 随最新 stable 漂移、clippy 报出本地看不到的新 lint。
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: "1.95"
           components: rustfmt, clippy
 
       - name: Install Linux system deps

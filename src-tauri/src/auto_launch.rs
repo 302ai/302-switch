@@ -17,9 +17,9 @@ fn get_macos_app_bundle_path(exe_path: &std::path::Path) -> Option<std::path::Pa
 
 const APP_NAME: &str = "302 Switch";
 
-/// 改名前（302 Switch）注册的开机自启项名称。仅用于升级后一次性清理，
+/// 改名前（302 CC Switch）注册的开机自启项名称。仅用于升级后一次性清理，
 /// 避免旧登录项残留导致「开关显示关闭，但系统仍在自启旧版」的错觉。
-const LEGACY_APP_NAME: &str = "302 Switch";
+const LEGACY_APP_NAME: &str = "302 CC Switch";
 
 fn get_auto_launch_named(app_name: &str) -> Result<AutoLaunch, AppError> {
     let exe_path =
@@ -48,7 +48,7 @@ fn get_auto_launch() -> Result<AutoLaunch, AppError> {
     get_auto_launch_named(APP_NAME)
 }
 
-/// 升级后一次性清理：如果旧名字（302 Switch）下还有开机自启登录项，关掉它。
+/// 升级后一次性清理：如果旧名字（302 CC Switch）下还有开机自启登录项，关掉它。
 /// 不然用户看到设置里开关是关的，系统却还在悄悄用旧版路径自启。
 /// 全程 best-effort——旧登录项本就不存在时会报错，直接忽略即可。
 pub fn cleanup_legacy_auto_launch() {
@@ -57,7 +57,7 @@ pub fn cleanup_legacy_auto_launch() {
     };
     if legacy.is_enabled().unwrap_or(false) {
         let _ = legacy.disable();
-        log::info!("已清理改名前（302 Switch）遗留的开机自启项");
+        log::info!("已清理改名前（302 CC Switch）遗留的开机自启项");
     }
 }
 
