@@ -116,7 +116,8 @@ export const providerPresets: ProviderPreset[] = [
     // 同时填 API Key 和请求地址。
     name: "企业私有化",
     nameKey: "providerPreset.enterprise",
-    websiteUrl: "https://302.ai",
+    // 官网链接不预填，等用户填自己的私有部署地址
+    websiteUrl: "",
     apiKeyUrl: "https://302.ai",
     apiKeyField: "ANTHROPIC_API_KEY",
     settingsConfig: {

@@ -114,4 +114,19 @@ export const claudeDesktopProviderPresets: ClaudeDesktopProviderPreset[] = [
     icon: "ai302",
     iconColor: "#7C3AED",
   },
+  {
+    // 企业私有化：302 企业版 / 私有部署。与上面 302.AI 同款 Anthropic 兼容层直连，
+    // 区别是 baseUrl 留空、官网链接不预填，等用户填自己的私有部署地址。third_party。
+    name: "企业私有化",
+    nameKey: "providerPreset.enterprise",
+    websiteUrl: "",
+    category: "third_party",
+    baseUrl: "",
+    apiKeyField: "ANTHROPIC_AUTH_TOKEN",
+    mode: "direct",
+    apiFormat: "anthropic",
+    modelRoutes: passthroughRoutes(),
+    icon: "ai302",
+    iconColor: "#7C3AED",
+  },
 ];

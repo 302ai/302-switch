@@ -184,4 +184,49 @@ export const openclawProviderPresets: OpenClawProviderPreset[] = [
       },
     },
   },
+  {
+    // 企业私有化：302 企业版 / 私有部署，与 302.AI（海外）同款接入，
+    // baseUrl / 官网链接留空，等用户填自己的私有部署地址。
+    name: "企业私有化",
+    nameKey: "providerPreset.enterprise",
+    websiteUrl: "",
+    apiKeyUrl: "",
+    settingsConfig: {
+      baseUrl: "",
+      apiKey: "",
+      api: "anthropic-messages",
+      models: [
+        {
+          id: "claude-opus-4-8",
+          name: "Claude Opus 4.8",
+          contextWindow: 200000,
+        },
+        {
+          id: "claude-sonnet-5",
+          name: "Claude Sonnet 5",
+          contextWindow: 200000,
+        },
+      ],
+    },
+    category: "third_party",
+    icon: "ai302",
+    iconColor: "#7C3AED",
+    templateValues: {
+      apiKey: {
+        label: "API Key",
+        placeholder: "",
+        editorValue: "",
+      },
+    },
+    suggestedDefaults: {
+      model: {
+        primary: "302ai/claude-opus-4-8",
+        fallbacks: ["302ai/claude-sonnet-5"],
+      },
+      modelCatalog: {
+        "302ai/claude-opus-4-8": { alias: "Opus" },
+        "302ai/claude-sonnet-5": { alias: "Sonnet" },
+      },
+    },
+  },
 ];

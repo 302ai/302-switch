@@ -337,6 +337,37 @@ export const opencodeProviderPresets: OpenCodeProviderPreset[] = [
     },
   },
   {
+    // 企业私有化：302 企业版 / 私有部署，与 302.AI（海外）同款 SDK 接入，
+    // baseURL / 官网链接留空，等用户填自己的私有部署地址。
+    name: "企业私有化",
+    nameKey: "providerPreset.enterprise",
+    websiteUrl: "",
+    apiKeyUrl: "",
+    settingsConfig: {
+      npm: "@ai-sdk/anthropic",
+      name: "302.AI",
+      options: {
+        baseURL: "",
+        apiKey: "",
+        setCacheKey: true,
+      },
+      models: {
+        "claude-opus-4-8": { name: "Claude Opus 4.8" },
+        "claude-sonnet-5": { name: "Claude Sonnet 5" },
+      },
+    },
+    category: "third_party",
+    icon: "ai302",
+    iconColor: "#7C3AED",
+    templateValues: {
+      apiKey: {
+        label: "API Key",
+        placeholder: "",
+        editorValue: "",
+      },
+    },
+  },
+  {
     name: "Oh My OpenCode",
     websiteUrl: "https://github.com/code-yeongyu/oh-my-openagent",
     settingsConfig: {

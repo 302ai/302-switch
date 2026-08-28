@@ -149,7 +149,8 @@ export const codexProviderPresets: CodexProviderPreset[] = [
     // API Key 和请求地址。不钉 model = 自动路由。
     name: "企业私有化",
     nameKey: "providerPreset.enterprise",
-    websiteUrl: "https://302.ai",
+    // 官网链接不预填，等用户填自己的私有部署地址
+    websiteUrl: "",
     apiKeyUrl: "https://302.ai",
     auth: generateThirdPartyAuth(""),
     config: generateThirdPartyConfig("302ai-enterprise", "", null, false),

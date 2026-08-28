@@ -202,4 +202,28 @@ export const hermesProviderPresets: HermesProviderPreset[] = [
       model: { default: "gpt-5.5", provider: "302ai" },
     },
   },
+  {
+    // 企业私有化：302 企业版 / 私有部署，与 302.AI（海外）同款接入，
+    // base_url / 官网链接留空，等用户填自己的私有部署地址。
+    name: "企业私有化",
+    nameKey: "providerPreset.enterprise",
+    websiteUrl: "",
+    apiKeyUrl: "",
+    settingsConfig: {
+      name: "302ai",
+      base_url: "",
+      api_key: "",
+      api_mode: "chat_completions",
+      models: [
+        { id: "gpt-5.5", name: "GPT-5.5" },
+        { id: "claude-sonnet-5", name: "Claude Sonnet 5" },
+      ],
+    },
+    category: "third_party",
+    icon: "ai302",
+    iconColor: "#7C3AED",
+    suggestedDefaults: {
+      model: { default: "gpt-5.5", provider: "302ai" },
+    },
+  },
 ];

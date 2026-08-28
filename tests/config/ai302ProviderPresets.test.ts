@@ -28,6 +28,8 @@ describe("302.AI presets across apps", () => {
     expect(p.apiKeyField).toBe("ANTHROPIC_API_KEY");
     expect(p.category).toBe("third_party");
     expect(p.nameKey).toBe("providerPreset.enterprise");
+    // 官网链接不预填
+    expect(p.websiteUrl).toBe("");
   });
 
   it("Claude: 302.AI uses Anthropic-compatible root with API key field", () => {
@@ -57,6 +59,7 @@ describe("302.AI presets across apps", () => {
     expect(ent.config).toContain("requires_openai_auth = false");
     expect(ent.category).toBe("third_party");
     expect(ent.nameKey).toBe("providerPreset.enterprise");
+    expect(ent.websiteUrl).toBe(""); // 官网链接不预填
     // 302 的海外、国内地址都直接使用 /v1，没有 /codex 路径
     const p = codexProviderPresets.find((x) => x.name === "302.AI")!;
     expect(p.config).toContain('base_url = "https://api.302.ai/v1"');
@@ -99,26 +102,44 @@ describe("302.AI presets across apps", () => {
     );
     expect(ent.category).toBe("third_party");
     expect(ent.nameKey).toBe("providerPreset.enterprise");
+    expect(ent.websiteUrl).toBe(""); // 官网链接不预填
   });
 
-  it("Claude Desktop: official + 302.AI only, passthrough routes", () => {
+  it("Claude Desktop: official + 302.AI + enterprise, passthrough routes", () => {
     expect(claudeDesktopProviderPresets.map((p) => p.name)).toEqual([
       "Claude Desktop Official",
       "302.AI",
+      "企业私有化",
     ]);
     const p = claudeDesktopProviderPresets.find((x) => x.name === "302.AI")!;
     expect(p.baseUrl).toBe("https://api.302.ai");
     expect(p.apiFormat).toBe("anthropic");
     expect(p.modelRoutes?.length).toBe(3);
+
+    // 企业私有化：baseUrl 与官网链接都留空，等用户填私有部署地址
+    const ent = claudeDesktopProviderPresets.find(
+      (x) => x.name === "企业私有化",
+    )!;
+    expect(ent.baseUrl).toBe("");
+    expect(ent.websiteUrl).toBe("");
+    expect(ent.category).toBe("third_party");
+    expect(ent.nameKey).toBe("providerPreset.enterprise");
   });
 
-  it("OpenCode: both 302.AI regions + custom templates", () => {
+  it("OpenCode: both 302.AI regions + enterprise + custom templates", () => {
     expect(opencodeProviderPresets.map((p) => p.name)).toEqual([
       "302.AI（国内）",
       "302.AI（海外）",
+      "企业私有化",
       "Oh My OpenCode",
       "Oh My OpenCode Slim",
     ]);
+    // 企业私有化：baseURL 与官网链接都留空，等用户填私有部署地址
+    const ent = opencodeProviderPresets.find((x) => x.name === "企业私有化")!;
+    expect((ent.settingsConfig.options as any).baseURL).toBe("");
+    expect(ent.websiteUrl).toBe("");
+    expect(ent.category).toBe("third_party");
+    expect(ent.nameKey).toBe("providerPreset.enterprise");
     const overseas = opencodeProviderPresets.find(
       (x) => x.name === "302.AI（海外）",
     )!;
@@ -135,23 +156,33 @@ describe("302.AI presets across apps", () => {
     );
   });
 
-  it("OpenClaw: both 302.AI regions use anthropic-messages", () => {
+  it("OpenClaw: both 302.AI regions + enterprise use anthropic-messages", () => {
     expect(openclawProviderPresets.map((p) => p.name)).toEqual([
       "302.AI（国内）",
       "302.AI（海外）",
+      "企业私有化",
     ]);
     const [domestic, overseas] = openclawProviderPresets;
     expect(overseas.settingsConfig.baseUrl).toBe("https://api.302.ai");
     expect(domestic.settingsConfig.baseUrl).toBe("https://api.302ai.cn");
     expect(overseas.settingsConfig.api).toBe("anthropic-messages");
     expect(domestic.settingsConfig.api).toBe("anthropic-messages");
+
+    // 企业私有化：baseUrl 与官网链接都留空，等用户填私有部署地址
+    const ent = openclawProviderPresets.find((x) => x.name === "企业私有化")!;
+    expect(ent.settingsConfig.baseUrl).toBe("");
+    expect(ent.settingsConfig.api).toBe("anthropic-messages");
+    expect(ent.websiteUrl).toBe("");
+    expect(ent.category).toBe("third_party");
+    expect(ent.nameKey).toBe("providerPreset.enterprise");
   });
 
-  it("Hermes: official + both 302.AI regions", () => {
+  it("Hermes: official + both 302.AI regions + enterprise", () => {
     expect(hermesProviderPresets.map((p) => p.name)).toEqual([
       "Nous Research",
       "302.AI（国内）",
       "302.AI（海外）",
+      "企业私有化",
     ]);
     const overseas = hermesProviderPresets.find(
       (x) => x.name === "302.AI（海外）",
@@ -163,6 +194,14 @@ describe("302.AI presets across apps", () => {
     expect(domestic.settingsConfig.base_url).toBe("https://api.302ai.cn/v1");
     expect(overseas.settingsConfig.api_mode).toBe("chat_completions");
     expect(domestic.settingsConfig.api_mode).toBe("chat_completions");
+
+    // 企业私有化：base_url 与官网链接都留空，等用户填私有部署地址
+    const ent = hermesProviderPresets.find((x) => x.name === "企业私有化")!;
+    expect(ent.settingsConfig.base_url).toBe("");
+    expect(ent.settingsConfig.api_mode).toBe("chat_completions");
+    expect(ent.websiteUrl).toBe("");
+    expect(ent.category).toBe("third_party");
+    expect(ent.nameKey).toBe("providerPreset.enterprise");
   });
 
   it("no partner promotions remain in any preset list", () => {
