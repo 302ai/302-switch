@@ -86,8 +86,11 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             src-tauri/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          # v2：仓库从 302-cc-switch 改名成 302-switch 后，旧缓存里 tauri build script
+          # 生成的权限文件烘焙了改名前的绝对路径（.../302-cc-switch/302-cc-switch/...），
+          # 被 restore-keys 捞回来会导致 build script 找不到文件而编译失败。加版本号让旧缓存失效。
+          key: ${{ runner.os }}-cargo-v2-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-v2-
 
       - name: Create frontend dist placeholder
         run: mkdir -p dist
