@@ -1114,7 +1114,12 @@
     "fetchModelsAuthFailed": "API Key が無効か、権限がありません",
     "fetchModelsNotSupported": "このプロバイダーはモデル一覧の取得に対応していません",
     "fetchModelsEndpointNotFound": "利用可能なモデル一覧エンドポイントが見つかりません。Base URL を確認するか、プロバイダーが該当 API を公開しているかご確認ください",
-    "fetchModelsTimeout": "リクエストがタイムアウトしました。ネットワーク接続を確認してください"
+    "fetchModelsTimeout": "リクエストがタイムアウトしました。ネットワーク接続を確認してください",
+    "enterprisePrefill": {
+      "hint": "前回の設定からベースURLを自動入力しました。APIキーはご自身で入力してください。",
+      "fillKey": "前回のキーを入力",
+      "keyFilled": "前回のキーを入力しました"
+    }
   },
   "copilot": {
     "authSection": "GitHub Copilot 認証",

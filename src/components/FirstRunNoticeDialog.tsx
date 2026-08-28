@@ -42,6 +42,12 @@ import ApiKeyInput from "@/components/providers/forms/ApiKeyInput";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import { useSettingsQuery } from "@/lib/query";
 import { providersApi, settingsApi } from "@/lib/api";
+import type { EnterpriseProfile } from "@/lib/api";
+import {
+  CLAUDE_DESKTOP_ROLE_ROUTE_IDS,
+  claudeDesktopProviderPresets,
+} from "@/config/claudeDesktopProviderPresets";
+import { generateUUID } from "@/utils/uuid";
 import { fetchModelsForConfig, probeChatKey } from "@/lib/api/model-fetch";
 import { streamCheckProvider } from "@/lib/api/model-test";
 import {
@@ -188,6 +194,93 @@ function enterpriseProviderLabel(root: string): string {
 // 切回公共版时要用它覆盖掉可能残留的企业版名字，不能假设 provider.name 还是原样。
 function ai302RegionProviderLabel(region: Ai302Region): string {
   return region === "cn" ? "302.AI（国内）" : "302.AI（海外）";
+}
+
+// Claude Desktop 没有 CLI 可检测，引导也不覆盖它。企业版用户填完私有地址后，
+// 这里照 CD 表单落库那套结构（settings.env + meta 直连路由）手搓一张等价的卡，
+// 让 CD 一侧开箱就有这条私有部署，不用再手填一遍。routeMap 走 sonnet/opus/haiku
+// 透传，与 claudeDesktopProviderPresets 里 302.AI 那条的 passthroughRoutes() 一致。
+function buildClaudeDesktopEnterpriseProvider(
+  root: string,
+  key: string,
+): Provider {
+  const preset = claudeDesktopProviderPresets.find(
+    (p) => p.nameKey === "providerPreset.enterprise",
+  );
+  const roles = CLAUDE_DESKTOP_ROLE_ROUTE_IDS;
+  const modelRoutes: Record<string, { model: string }> = {};
+  for (const routeId of [roles.sonnet, roles.opus, roles.haiku]) {
+    modelRoutes[routeId] = { model: routeId };
+  }
+  return {
+    id: generateUUID(),
+    name: enterpriseProviderLabel(root),
+    websiteUrl: root,
+    category: "third_party",
+    settingsConfig: {
+      env: {
+        ANTHROPIC_BASE_URL: root,
+        ANTHROPIC_AUTH_TOKEN: key,
+      },
+    },
+    meta: {
+      claudeDesktopMode: "direct",
+      apiFormat: "anthropic",
+      claudeDesktopModelRoutes: modelRoutes,
+    },
+    icon: preset?.icon ?? "ai302",
+    iconColor: preset?.iconColor ?? "#7C3AED",
+  };
+}
+
+// 引导「企业版」收尾：把这次填的私有地址 + key 存成企业档案，并给 Claude Desktop
+// 补一张等价卡。两步都是「有则跳过、错则吞掉」——引导主流程（配置 Claude/Codex/
+// Gemini）已经成功了，这里是锦上添花，绝不能因为它抛错把用户卡在引导最后一步。
+async function finalizeEnterpriseOnboarding(
+  root: string,
+  key: string,
+  brand: string | null,
+): Promise<void> {
+  const trimmedKey = key.trim();
+  const profile: EnterpriseProfile = {
+    baseUrl: root,
+    brandName: brand ?? undefined,
+    apiKey: trimmedKey || undefined,
+  };
+  try {
+    await settingsApi.setEnterpriseProfile(profile);
+  } catch (error) {
+    console.error("[Onboarding] Failed to persist enterprise profile", error);
+  }
+
+  // Claude Desktop 自动建卡：只让卡片出现在列表里，不激活、不写 live。
+  // 两道闸门：
+  // 1) 同地址已存在 → 幂等跳过。
+  // 2) CD 必须已有「当前供应商」再建——否则后端 add() 的 "current is none" 分支会
+  //    把这张卡设成 current 并写 live（对 CD 是 addToLive 管不到的独占写入）。启动
+  //    编排（migrate_default_to_ai302_domestic）正常会给 CD 落一个默认 current，
+  //    这里只是兜底，避免极端状态下悄悄激活了用户没选过的私有部署。
+  try {
+    const [existing, current] = await Promise.all([
+      providersApi.getAll("claude-desktop"),
+      providersApi.getCurrent("claude-desktop").catch(() => ""),
+    ]);
+    const already = Object.values(existing).some(
+      (p) =>
+        (p.settingsConfig?.env as Record<string, unknown> | undefined)?.[
+          "ANTHROPIC_BASE_URL"
+        ] === root,
+    );
+    if (!already && current) {
+      const provider = buildClaudeDesktopEnterpriseProvider(root, trimmedKey);
+      await providersApi.add(provider, "claude-desktop", false);
+    }
+  } catch (error) {
+    console.error(
+      "[Onboarding] Failed to seed Claude Desktop enterprise provider",
+      error,
+    );
+  }
 }
 
 function applyClaudeModelMode(
@@ -503,6 +596,31 @@ export function FirstRunNoticeDialog() {
       }
       const results = await Promise.all(selectedApps.map(configureApp));
       setConfigureResults(results);
+
+      // 企业版收尾：记住私有档案 + 给 Claude Desktop 补卡（只在至少配成一个 app 后）。
+      // 公共版则清掉可能残留的企业档案，语义同别处「切回公共版」。
+      if (edition === "enterprise") {
+        if (results.some((r) => r.success)) {
+          await finalizeEnterpriseOnboarding(
+            resolvedBaseUrlRoot,
+            apiKey,
+            detectAi302BrandName(resolvedBaseUrlRoot),
+          );
+          await queryClient.invalidateQueries({
+            queryKey: ["providers", "claude-desktop"],
+          });
+        }
+      } else {
+        try {
+          await settingsApi.setEnterpriseProfile(null);
+        } catch (error) {
+          console.error(
+            "[Onboarding] Failed to clear enterprise profile",
+            error,
+          );
+        }
+      }
+
       await Promise.all(
         selectedApps.map((appId) =>
           queryClient.invalidateQueries({ queryKey: ["providers", appId] }),
@@ -518,9 +636,12 @@ export function FirstRunNoticeDialog() {
       setIsConfiguring(false);
     }
   }, [
+    apiKey,
     configureApp,
+    edition,
     fixedModeValid,
     queryClient,
+    resolvedBaseUrlRoot,
     selectedApps,
     verifyKey,
     verifyState,

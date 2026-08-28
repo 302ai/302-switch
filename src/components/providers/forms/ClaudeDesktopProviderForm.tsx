@@ -67,6 +67,7 @@ import {
   providersApi,
   type ClaudeDesktopDefaultRoute,
 } from "@/lib/api/providers";
+import { settingsApi, type EnterpriseProfile } from "@/lib/api";
 import { resolveManagedAccountId } from "@/lib/authBinding";
 
 export type ClaudeDesktopProviderFormValues = ProviderFormData & {
@@ -286,6 +287,25 @@ export function ClaudeDesktopProviderForm({
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(
     "custom",
   );
+  // 企业私有化档案：引导里填过的私有部署地址 + key（Claude Desktop 侧）。
+  const [enterpriseProfile, setEnterpriseProfile] =
+    useState<EnterpriseProfile | null>(null);
+  const [enterpriseKeyFilled, setEnterpriseKeyFilled] = useState(false);
+  useEffect(() => {
+    if (initialData) return;
+    let cancelled = false;
+    settingsApi
+      .getEnterpriseProfile()
+      .then((profile) => {
+        if (!cancelled) setEnterpriseProfile(profile);
+      })
+      .catch(() => {
+        // 读不到就静默关闭回填
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialData]);
   const [activePreset, setActivePreset] = useState<{
     id: string;
     category?: ProviderCategory;
@@ -380,6 +400,15 @@ export function ClaudeDesktopProviderForm({
   const isOfficial =
     initialData?.category === "official" ||
     activePreset?.category === "official";
+  // 当前选中的是不是「企业私有化」预设，且引导里存过私有档案——决定回填提示条。
+  const selectedPresetEntry = selectedPresetId
+    ? presetEntries.find((e) => e.id === selectedPresetId)
+    : undefined;
+  const showEnterprisePrefill =
+    !initialData &&
+    selectedPresetEntry?.preset.nameKey === "providerPreset.enterprise" &&
+    Boolean(enterpriseProfile?.baseUrl?.trim());
+  const hasStoredEnterpriseKey = Boolean(enterpriseProfile?.apiKey?.trim());
   const usesManagedOAuth =
     activePreset?.requiresOAuth === true ||
     activeProviderType === "github_copilot" ||
@@ -400,15 +429,32 @@ export function ClaudeDesktopProviderForm({
     formWebsiteUrl: form.watch("websiteUrl") || "",
   });
 
-  const applyDesktopPreset = (preset: ClaudeDesktopProviderPreset) => {
+  const applyDesktopPreset = (
+    preset: ClaudeDesktopProviderPreset,
+    opts?: { fillEnterpriseKey?: boolean },
+  ) => {
+    // 「企业私有化」预设：Base URL 用引导里存过的私有档案回填，官网链接跟着填；
+    // key 只在用户点「填入上次的 key」时才灌进去，否则留空让用户自己填。
+    const isEnterprisePreset = preset.nameKey === "providerPreset.enterprise";
+    const enterpriseBaseUrl =
+      isEnterprisePreset && enterpriseProfile?.baseUrl?.trim()
+        ? enterpriseProfile.baseUrl.trim()
+        : "";
+    const fillKey = isEnterprisePreset && Boolean(opts?.fillEnterpriseKey);
+    setEnterpriseKeyFilled(fillKey);
+
     form.setValue("name", preset.nameKey ? t(preset.nameKey) : preset.name);
-    form.setValue("websiteUrl", preset.websiteUrl);
+    form.setValue("websiteUrl", preset.websiteUrl || enterpriseBaseUrl);
     form.setValue("notes", "");
     form.setValue("icon", preset.icon ?? "");
     form.setValue("iconColor", preset.iconColor ?? "");
 
-    setBaseUrl(preset.baseUrl);
-    setApiKey("");
+    setBaseUrl(enterpriseBaseUrl || preset.baseUrl);
+    setApiKey(
+      fillKey && enterpriseProfile?.apiKey?.trim()
+        ? enterpriseProfile.apiKey.trim()
+        : "",
+    );
     setApiKeyField(preset.apiKeyField ?? "ANTHROPIC_AUTH_TOKEN");
     setApiFormat(preset.apiFormat ?? "anthropic");
 
@@ -437,6 +483,7 @@ export function ClaudeDesktopProviderForm({
 
     if (value === "custom") {
       setActivePreset(null);
+      setEnterpriseKeyFilled(false);
       form.reset(defaultValues);
       setBaseUrl("");
       setApiKey("");
@@ -770,6 +817,42 @@ export function ClaudeDesktopProviderForm({
             onPresetChange={handlePresetChange}
             category={activePreset?.category}
           />
+        )}
+
+        {showEnterprisePrefill && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+            <span className="text-muted-foreground">
+              {t("providerForm.enterprisePrefill.hint", {
+                defaultValue:
+                  "已按上次填写回填私有部署地址（Base URL）。API Key 需你自己填。",
+              })}
+            </span>
+            {hasStoredEnterpriseKey &&
+              (enterpriseKeyFilled ? (
+                <span className="shrink-0 text-primary">
+                  {t("providerForm.enterprisePrefill.keyFilled", {
+                    defaultValue: "已填入上次的 Key",
+                  })}
+                </span>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 shrink-0"
+                  onClick={() =>
+                    selectedPresetEntry &&
+                    applyDesktopPreset(selectedPresetEntry.preset, {
+                      fillEnterpriseKey: true,
+                    })
+                  }
+                >
+                  {t("providerForm.enterprisePrefill.fillKey", {
+                    defaultValue: "填入上次的 Key",
+                  })}
+                </Button>
+              ))}
+          </div>
         )}
 
         <BasicFormFields form={form} />

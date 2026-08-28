@@ -13,6 +13,8 @@ import {
   formatRequestOverrideObject,
 } from "@/lib/requestOverrides";
 import { providersApi, settingsApi, type AppId } from "@/lib/api";
+import type { EnterpriseProfile } from "@/lib/api";
+import { writeAi302BaseUrl, writeAi302ApiKey } from "@/config/ai302";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import type {
   ProviderCategory,
@@ -314,6 +316,28 @@ function ProviderFormFull({
   const [isEndpointModalOpen, setIsEndpointModalOpen] = useState(false);
   const [isCodexEndpointModalOpen, setIsCodexEndpointModalOpen] =
     useState(false);
+
+  // 企业私有化档案：引导里填过的私有部署地址 + key。选中「企业私有化」预设时用来
+  // 回填 Base URL，并让「填入上次的 key」按钮有 key 可填。仅新建模式加载一次。
+  const [enterpriseProfile, setEnterpriseProfile] =
+    useState<EnterpriseProfile | null>(null);
+  // 当前是否已把上次的 key 填进表单——按钮据此显示/隐藏，避免重复点。
+  const [enterpriseKeyFilled, setEnterpriseKeyFilled] = useState(false);
+  useEffect(() => {
+    if (initialData) return;
+    let cancelled = false;
+    settingsApi
+      .getEnterpriseProfile()
+      .then((profile) => {
+        if (!cancelled) setEnterpriseProfile(profile);
+      })
+      .catch(() => {
+        // 读不到就当没存过，回填功能静默关闭，不打扰用户
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialData]);
 
   const [draftCustomEndpoints, setDraftCustomEndpoints] = useState<string[]>(
     () => {
@@ -1611,10 +1635,14 @@ function ProviderFormFull({
     initialData,
   });
 
-  const handlePresetChange = (value: string) => {
+  const handlePresetChange = (
+    value: string,
+    opts?: { fillEnterpriseKey?: boolean },
+  ) => {
     setSelectedPresetId(value);
     if (value === "custom") {
       setActivePreset(null);
+      setEnterpriseKeyFilled(false);
       form.reset(defaultValues);
 
       if (appId === "codex") {
@@ -1655,10 +1683,39 @@ function ProviderFormFull({
       partnerPromotionKey: entry.preset.partnerPromotionKey,
     });
 
+    // ── 企业私有化回填 ──────────────────────────────────────────
+    // 选中「企业私有化」预设时，把引导里存过的私有档案套进预设那几个空槽：
+    // Base URL 总是回填，key 只在用户点了「填入上次的 key」按钮时才填（fillKey）。
+    // writeAi302BaseUrl / writeAi302ApiKey 已经按各 app 的形状分好支，7 家通用。
+    const isEnterprisePreset =
+      entry.preset.nameKey === "providerPreset.enterprise";
+    const fillKey = isEnterprisePreset && Boolean(opts?.fillEnterpriseKey);
+    setEnterpriseKeyFilled(fillKey);
+    const injectEnterprise = (
+      config: Record<string, unknown>,
+    ): Record<string, unknown> => {
+      if (!isEnterprisePreset) return config;
+      let next = config;
+      const baseUrl = enterpriseProfile?.baseUrl?.trim();
+      if (baseUrl) next = writeAi302BaseUrl(appId, next, baseUrl);
+      const key = enterpriseProfile?.apiKey?.trim();
+      if (fillKey && key) next = writeAi302ApiKey(appId, next, key);
+      return next;
+    };
+    // 企业预设的官网链接留空，回填时用私有部署地址填上，和引导落库保持一致。
+    const enterpriseWebsite =
+      isEnterprisePreset && enterpriseProfile?.baseUrl?.trim()
+        ? enterpriseProfile.baseUrl.trim()
+        : "";
+
     if (appId === "codex") {
       const preset = entry.preset as CodexProviderPreset;
-      const auth = preset.auth ?? {};
-      const config = preset.config ?? "";
+      const injected = injectEnterprise({
+        auth: preset.auth ?? {},
+        config: preset.config ?? "",
+      });
+      const auth = injected.auth as Record<string, unknown>;
+      const config = (injected.config ?? "") as string;
 
       resetCodexConfig(auth, config, preset.modelCatalog ?? []);
       setCodexChatReasoning(preset.codexChatReasoning ?? {});
@@ -1670,7 +1727,7 @@ function ProviderFormFull({
 
       form.reset({
         name: preset.nameKey ? t(preset.nameKey) : preset.name,
-        websiteUrl: preset.websiteUrl ?? "",
+        websiteUrl: preset.websiteUrl || enterpriseWebsite,
         settingsConfig: JSON.stringify({ auth, config }, null, 2),
         icon: preset.icon ?? "",
         iconColor: preset.iconColor ?? "",
@@ -1680,15 +1737,18 @@ function ProviderFormFull({
 
     if (appId === "gemini") {
       const preset = entry.preset as GeminiProviderPreset;
-      const env = (preset.settingsConfig as any)?.env ?? {};
-      const config = (preset.settingsConfig as any)?.config ?? {};
+      const settingsConfig = injectEnterprise(
+        preset.settingsConfig as Record<string, unknown>,
+      );
+      const env = (settingsConfig as any)?.env ?? {};
+      const config = (settingsConfig as any)?.config ?? {};
 
       resetGeminiConfig(env, config);
 
       form.reset({
         name: preset.nameKey ? t(preset.nameKey) : preset.name,
-        websiteUrl: preset.websiteUrl ?? "",
-        settingsConfig: JSON.stringify(preset.settingsConfig, null, 2),
+        websiteUrl: preset.websiteUrl || enterpriseWebsite,
+        settingsConfig: JSON.stringify(settingsConfig, null, 2),
         icon: preset.icon ?? "",
         iconColor: preset.iconColor ?? "",
       });
@@ -1711,12 +1771,17 @@ function ProviderFormFull({
         return;
       }
 
-      opencodeForm.resetOpencodeState(config);
+      // OpenCodeProviderConfig 是具名结构，injectEnterprise 只改 options.baseURL /
+      // options.apiKey，形状不变，故经 unknown 往返 cast 回来是安全的。
+      const injectedConfig = injectEnterprise(
+        config as unknown as Record<string, unknown>,
+      ) as unknown as typeof config;
+      opencodeForm.resetOpencodeState(injectedConfig);
 
       form.reset({
         name: preset.nameKey ? t(preset.nameKey) : preset.name,
-        websiteUrl: preset.websiteUrl ?? "",
-        settingsConfig: JSON.stringify(config, null, 2),
+        websiteUrl: preset.websiteUrl || enterpriseWebsite,
+        settingsConfig: JSON.stringify(injectedConfig, null, 2),
         icon: preset.icon ?? "",
         iconColor: preset.iconColor ?? "",
       });
@@ -1726,7 +1791,9 @@ function ProviderFormFull({
     // OpenClaw preset handling
     if (appId === "openclaw") {
       const preset = entry.preset as OpenClawProviderPreset;
-      const config = preset.settingsConfig;
+      const config = injectEnterprise(
+        preset.settingsConfig as Record<string, unknown>,
+      );
 
       // Update activePreset with suggestedDefaults for OpenClaw
       setActivePreset({
@@ -1742,7 +1809,7 @@ function ProviderFormFull({
       // Update form fields
       form.reset({
         name: preset.nameKey ? t(preset.nameKey) : preset.name,
-        websiteUrl: preset.websiteUrl ?? "",
+        websiteUrl: preset.websiteUrl || enterpriseWebsite,
         settingsConfig: JSON.stringify(config, null, 2),
         icon: preset.icon ?? "",
         iconColor: preset.iconColor ?? "",
@@ -1753,13 +1820,15 @@ function ProviderFormFull({
     // Hermes preset handling
     if (appId === "hermes") {
       const preset = entry.preset as HermesProviderPreset;
-      const config = preset.settingsConfig;
+      const config = injectEnterprise(
+        preset.settingsConfig as Record<string, unknown>,
+      );
 
       hermesForm.resetHermesState(config);
 
       form.reset({
         name: preset.nameKey ? t(preset.nameKey) : preset.name,
-        websiteUrl: preset.websiteUrl ?? "",
+        websiteUrl: preset.websiteUrl || enterpriseWebsite,
         settingsConfig: JSON.stringify(config, null, 2),
         icon: preset.icon ?? "",
         iconColor: preset.iconColor ?? "",
@@ -1768,9 +1837,8 @@ function ProviderFormFull({
     }
 
     const preset = entry.preset as ProviderPreset;
-    const config = applyTemplateValues(
-      preset.settingsConfig,
-      preset.templateValues,
+    const config = injectEnterprise(
+      applyTemplateValues(preset.settingsConfig, preset.templateValues),
     );
 
     if (preset.apiFormat) {
@@ -1784,7 +1852,7 @@ function ProviderFormFull({
 
     form.reset({
       name: preset.nameKey ? t(preset.nameKey) : preset.name,
-      websiteUrl: preset.websiteUrl ?? "",
+      websiteUrl: preset.websiteUrl || enterpriseWebsite,
       settingsConfig: JSON.stringify(config, null, 2),
       icon: preset.icon ?? "",
       iconColor: preset.iconColor ?? "",
@@ -1822,6 +1890,17 @@ function ProviderFormFull({
     />
   );
 
+  // 当前选中的是不是「企业私有化」预设，且引导里存过私有档案——决定是否显示
+  // 「Base URL 已回填 + 填入上次的 key」这条提示。
+  const selectedPresetEntry = selectedPresetId
+    ? presetEntries.find((e) => e.id === selectedPresetId)
+    : undefined;
+  const showEnterprisePrefill =
+    !initialData &&
+    selectedPresetEntry?.preset.nameKey === "providerPreset.enterprise" &&
+    Boolean(enterpriseProfile?.baseUrl?.trim());
+  const hasStoredEnterpriseKey = Boolean(enterpriseProfile?.apiKey?.trim());
+
   return (
     <>
       <Form {...form}>
@@ -1840,6 +1919,42 @@ function ProviderFormFull({
               onManageUniversalProviders={onManageUniversalProviders}
               category={category}
             />
+          )}
+
+          {showEnterprisePrefill && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+              <span className="text-muted-foreground">
+                {t("providerForm.enterprisePrefill.hint", {
+                  defaultValue:
+                    "已按上次填写回填私有部署地址（Base URL）。API Key 需你自己填。",
+                })}
+              </span>
+              {hasStoredEnterpriseKey &&
+                (enterpriseKeyFilled ? (
+                  <span className="shrink-0 text-primary">
+                    {t("providerForm.enterprisePrefill.keyFilled", {
+                      defaultValue: "已填入上次的 Key",
+                    })}
+                  </span>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 shrink-0"
+                    onClick={() =>
+                      selectedPresetId &&
+                      handlePresetChange(selectedPresetId, {
+                        fillEnterpriseKey: true,
+                      })
+                    }
+                  >
+                    {t("providerForm.enterprisePrefill.fillKey", {
+                      defaultValue: "填入上次的 Key",
+                    })}
+                  </Button>
+                ))}
+            </div>
           )}
 
           <BasicFormFields
