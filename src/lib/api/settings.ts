@@ -19,6 +19,17 @@ export interface WebDavTestResult {
   message?: string;
 }
 
+/**
+ * 企业私有化档案：引导「企业版」分支填过的私有部署地址 + key。
+ * 后端存在 settings 键值表，是「Claude Desktop 自动建卡」和「添加供应商回填」
+ * 的唯一数据源。字段与 Rust EnterpriseProfile 对齐（camelCase）。
+ */
+export interface EnterpriseProfile {
+  baseUrl: string;
+  brandName?: string;
+  apiKey?: string;
+}
+
 export interface CodexUnifyHistoryRestoreResult {
   restoredJsonlFiles: number;
   restoredStateRows: number;
@@ -37,6 +48,18 @@ export const settingsApi = {
 
   async save(settings: Settings): Promise<boolean> {
     return await invoke("save_settings", { settings });
+  },
+
+  /** 读企业私有化档案；没存过返回 null */
+  async getEnterpriseProfile(): Promise<EnterpriseProfile | null> {
+    return await invoke("get_enterprise_profile");
+  },
+
+  /** 写企业私有化档案；传 null 清除（切回公共版时用） */
+  async setEnterpriseProfile(
+    profile: EnterpriseProfile | null,
+  ): Promise<void> {
+    await invoke("set_enterprise_profile", { profile });
   },
 
   /** 是否存在统一 Codex 会话历史的迁移备份（关闭弹窗据此显示"恢复备份"勾选） */
