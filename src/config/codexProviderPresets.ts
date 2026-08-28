@@ -143,6 +143,22 @@ export const codexProviderPresets: CodexProviderPreset[] = [
     iconColor: "#7C3AED",
   },
   {
+    // 企业私有化：302 企业版 / 私有部署。原生 Responses 透传，与上面的 302.AI 同款，
+    // 唯一区别是 base_url 生成成空串（占位），等用户填自己的私有部署地址
+    //（形如 https://your-company.302.ai/v1）。归 third_party，提示语要求同时填
+    // API Key 和请求地址。不钉 model = 自动路由。
+    name: "企业私有化",
+    nameKey: "providerPreset.enterprise",
+    websiteUrl: "https://302.ai",
+    apiKeyUrl: "https://302.ai",
+    auth: generateThirdPartyAuth(""),
+    config: generateThirdPartyConfig("302ai-enterprise", "", null, false),
+    apiFormat: "openai_responses",
+    category: "third_party",
+    icon: "ai302",
+    iconColor: "#7C3AED",
+  },
+  {
     // OpenAI 官方直连 API：真实 sk-... Key，按量计费，走原生 Responses 接口
     // （不需要像 302.AI 那样本地转换成 Chat Completions）。跟"OpenAI Official"
     // （订阅登录）是两码事，分开一张卡，避免和订阅账号混在一起。

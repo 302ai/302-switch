@@ -11,11 +11,23 @@ import { AI302_SEED_IDS_CN } from "@/config/ai302";
 // 国内、海外 302.AI 节点必须是可辨认、可独立选择的预设。
 
 describe("302.AI presets across apps", () => {
-  it("Claude: official + 302.AI only", () => {
+  it("Claude: official + 302.AI + enterprise self-hosted", () => {
     expect(providerPresets.map((p) => p.name)).toEqual([
       "Claude Official",
       "302.AI",
+      "企业私有化",
     ]);
+  });
+
+  it("Claude: enterprise preset ships empty base URL for the user to fill", () => {
+    const p = providerPresets.find((x) => x.name === "企业私有化")!;
+    const env = (p.settingsConfig as any).env;
+    // base_url 留空 = 用户填自己的私有部署地址；沿用 302 的 API Key 字段和分类语义
+    expect(env.ANTHROPIC_BASE_URL).toBe("");
+    expect(env).toHaveProperty("ANTHROPIC_API_KEY", "");
+    expect(p.apiKeyField).toBe("ANTHROPIC_API_KEY");
+    expect(p.category).toBe("third_party");
+    expect(p.nameKey).toBe("providerPreset.enterprise");
   });
 
   it("Claude: 302.AI uses Anthropic-compatible root with API key field", () => {
@@ -36,8 +48,15 @@ describe("302.AI presets across apps", () => {
     expect(codexProviderPresets.map((p) => p.name)).toEqual([
       "OpenAI Official",
       "302.AI",
+      "企业私有化",
       "OpenAI API",
     ]);
+    // 企业私有化：base_url 生成为空串（占位），等用户填私有部署地址
+    const ent = codexProviderPresets.find((x) => x.name === "企业私有化")!;
+    expect(ent.config).toContain('base_url = ""');
+    expect(ent.config).toContain("requires_openai_auth = false");
+    expect(ent.category).toBe("third_party");
+    expect(ent.nameKey).toBe("providerPreset.enterprise");
     // 302 的海外、国内地址都直接使用 /v1，没有 /codex 路径
     const p = codexProviderPresets.find((x) => x.name === "302.AI")!;
     expect(p.config).toContain('base_url = "https://api.302.ai/v1"');
@@ -59,16 +78,27 @@ describe("302.AI presets across apps", () => {
     expect(direct.auth).toHaveProperty("OPENAI_API_KEY", "");
   });
 
-  it("Gemini: official + 302.AI + custom template", () => {
+  it("Gemini: official + 302.AI + enterprise + custom template", () => {
     expect(geminiProviderPresets.map((p) => p.name)).toEqual([
       "Google Official",
       "302.AI",
+      "企业私有化",
       "自定义",
     ]);
     const p = geminiProviderPresets.find((x) => x.name === "302.AI")!;
     expect(p.baseURL).toBe("https://api.302.ai");
     expect((p.settingsConfig as any).env).toHaveProperty("GEMINI_API_KEY", "");
     expect(AI302_SEED_IDS_CN.gemini).toBe("ai302-cn-gemini");
+
+    // 企业私有化：base_url 留空，等用户填私有部署地址
+    const ent = geminiProviderPresets.find((x) => x.name === "企业私有化")!;
+    expect((ent.settingsConfig as any).env.GOOGLE_GEMINI_BASE_URL).toBe("");
+    expect((ent.settingsConfig as any).env).toHaveProperty(
+      "GEMINI_API_KEY",
+      "",
+    );
+    expect(ent.category).toBe("third_party");
+    expect(ent.nameKey).toBe("providerPreset.enterprise");
   });
 
   it("Claude Desktop: official + 302.AI only, passthrough routes", () => {
@@ -130,9 +160,7 @@ describe("302.AI presets across apps", () => {
       (x) => x.name === "302.AI（国内）",
     )!;
     expect(overseas.settingsConfig.base_url).toBe("https://api.302.ai/v1");
-    expect(domestic.settingsConfig.base_url).toBe(
-      "https://api.302ai.cn/v1",
-    );
+    expect(domestic.settingsConfig.base_url).toBe("https://api.302ai.cn/v1");
     expect(overseas.settingsConfig.api_mode).toBe("chat_completions");
     expect(domestic.settingsConfig.api_mode).toBe("chat_completions");
   });

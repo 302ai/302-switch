@@ -1337,6 +1337,7 @@
   "providerPreset": {
     "label": "Provider Preset",
     "custom": "Custom Configuration",
+    "enterprise": "Enterprise (self-hosted)",
     "other": "Other",
     "hint": "You can continue to adjust the fields below after selecting a preset.",
     "searchTooltip": "Search presets",
@@ -2964,6 +2965,7 @@
     "keyNetworkErrorEnterprise": "Could not reach that address. Check the Base URL and try again.",
     "enterpriseKeyHint": "Generate an API key in your enterprise admin console",
     "keyOk": "Key verified, {{count}} models found",
+    "keyOkChatVerified": "Key works (verified via chat endpoint)",
     "getKey": "Get a key from 302.AI",
     "verifyAndDiagnose": "Verify and diagnose",
     "appsTitle": "Choose clients to connect",
@@ -3008,6 +3010,7 @@
     "verify": "Run diagnosis",
     "verifying": "Verifying…",
     "verifyOk": "Key works, {{num}} models ready",
+    "verifyOkChat": "Key works (verified via chat endpoint)",
     "verifyNeedKey": "Enter a key before verifying",
     "verifyFailKey": "Key is invalid or expired",
     "verifyFailNetwork": "Can't reach 302.AI. Check your network and retry.",

@@ -7,6 +7,34 @@ export interface FetchedModel {
   ownedBy: string | null;
 }
 
+export interface KeyProbeResult {
+  /** "ok" = 鉴权通过；"authFailed" = key 无效/无权限；"unreachable" = 网络/服务器异常 */
+  outcome: "ok" | "authFailed" | "unreachable";
+  httpStatus: number | null;
+  message: string;
+}
+
+/**
+ * 用 POST /chat/completions 探活一把 key，不依赖 /v1/models 列表接口。
+ *
+ * 面向企业私有化 / 自签中转：这类网关常不开放 /models，导致 fetchModelsForConfig
+ * 拿 401/403 让 UI 误报「Key 无效」。本探活把「鉴权失败」和「只是 /models 没开」
+ * 分开——只有 401/403 才算 key 坏。`model` 省略时后端用哨兵模型名（不烧 token）。
+ */
+export async function probeChatKey(
+  baseUrl: string,
+  apiKey: string,
+  model?: string,
+  customUserAgent?: string,
+): Promise<KeyProbeResult> {
+  return invoke("probe_chat_key", {
+    baseUrl,
+    apiKey,
+    model,
+    customUserAgent,
+  });
+}
+
 /**
  * 从供应商获取可用模型列表
  *

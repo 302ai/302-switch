@@ -42,7 +42,7 @@ import ApiKeyInput from "@/components/providers/forms/ApiKeyInput";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import { useSettingsQuery } from "@/lib/query";
 import { providersApi, settingsApi } from "@/lib/api";
-import { fetchModelsForConfig } from "@/lib/api/model-fetch";
+import { fetchModelsForConfig, probeChatKey } from "@/lib/api/model-fetch";
 import { streamCheckProvider } from "@/lib/api/model-test";
 import {
   AI302_API_KEY_URL,
@@ -233,6 +233,8 @@ export function FirstRunNoticeDialog() {
   const [verifyState, setVerifyState] = useState<VerifyState>("idle");
   const [verifyError, setVerifyError] = useState("");
   const [modelCount, setModelCount] = useState(0);
+  // 走了 chat 探活兜底（/models 没开、靠对话接口确认 key）时置真，成功文案改口。
+  const [verifiedViaChat, setVerifiedViaChat] = useState(false);
   const [modelMode, setModelMode] = useState<ModelMode>("follow");
   const [fixedModels, setFixedModels] = useState(INITIAL_FIXED_MODELS);
   const [isConfiguring, setIsConfiguring] = useState(false);
@@ -268,6 +270,7 @@ export function FirstRunNoticeDialog() {
   useEffect(() => {
     setVerifyState("idle");
     setVerifyError("");
+    setVerifiedViaChat(false);
   }, [resolvedBaseUrlRoot]);
 
   const resetWizardState = useCallback(() => {
@@ -282,6 +285,7 @@ export function FirstRunNoticeDialog() {
     setVerifyState("idle");
     setVerifyError("");
     setModelCount(0);
+    setVerifiedViaChat(false);
     setModelMode("follow");
     setFixedModels(INITIAL_FIXED_MODELS);
     setIsConfiguring(false);
@@ -367,11 +371,38 @@ export function FirstRunNoticeDialog() {
     try {
       const models = await fetchModelsForConfig(resolvedBaseUrlRoot, key);
       setModelCount(models.length);
+      setVerifiedViaChat(false);
       setVerifyState("ok");
       return true;
     } catch (error) {
       const message = String(error);
       const authFailed = message.includes("401") || message.includes("403");
+
+      // 企业私有化 / 自签中转网关常不开放 GET /v1/models，401/403 未必是 key 坏。
+      // 降级用 POST /chat/completions 探活确认：真过了就判通过（详见 probe_chat_key）。
+      if (authFailed && edition === "enterprise") {
+        try {
+          const probe = await probeChatKey(resolvedBaseUrlRoot, key);
+          if (probe.outcome === "ok") {
+            setVerifiedViaChat(true);
+            setVerifyState("ok");
+            return true;
+          }
+          if (probe.outcome === "unreachable") {
+            setVerifyError(
+              t("onboarding.keyNetworkErrorEnterprise", {
+                defaultValue: "无法连接该地址，请检查 Base URL 是否正确",
+              }),
+            );
+            setVerifyState("error");
+            return false;
+          }
+          // outcome === "authFailed" → 确实是 key 坏，落到下面统一提示
+        } catch {
+          // 探活命令本身异常：退回按 /models 的原始结论提示，不吞错
+        }
+      }
+
       setVerifyError(
         authFailed
           ? t("onboarding.keyInvalid", {
@@ -992,10 +1023,14 @@ export function FirstRunNoticeDialog() {
               {verifyState === "ok" && (
                 <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-700 dark:text-emerald-300">
                   <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-                  {t("onboarding.keyOk", {
-                    count: modelCount,
-                    defaultValue: `Key 可用，已读取 ${modelCount} 个模型`,
-                  })}
+                  {verifiedViaChat
+                    ? t("onboarding.keyOkChatVerified", {
+                        defaultValue: "Key 可用（已通过对话接口验证）",
+                      })
+                    : t("onboarding.keyOk", {
+                        count: modelCount,
+                        defaultValue: `Key 可用，已读取 ${modelCount} 个模型`,
+                      })}
                 </div>
               )}
               {verifyState === "error" && (

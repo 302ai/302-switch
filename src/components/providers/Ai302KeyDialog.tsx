@@ -40,7 +40,7 @@ import {
   writeAi302ApiKey,
   writeAi302BaseUrl,
 } from "@/config/ai302";
-import { fetchModelsForConfig } from "@/lib/api/model-fetch";
+import { fetchModelsForConfig, probeChatKey } from "@/lib/api/model-fetch";
 import { settingsApi, type AppId } from "@/lib/api";
 import type { Provider } from "@/types";
 
@@ -63,7 +63,8 @@ interface Ai302KeyDialogProps {
 type VerifyState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "ok"; modelCount: number }
+  // viaChat：/models 没开、靠 chat 探活兜底确认时置真，modelCount 不适用
+  | { status: "ok"; modelCount: number; viaChat?: boolean }
   | { status: "fail"; reason: "key" | "network" | "empty" };
 
 export function Ai302KeyDialog({
@@ -157,6 +158,29 @@ export function Ai302KeyDialog({
     } catch (err) {
       const msg = String(err);
       const isAuthError = msg.includes("HTTP 401") || msg.includes("HTTP 403");
+
+      // 企业私有化端点常不开放 /models，401/403 未必是 key 坏。
+      // 降级用 chat/completions 探活兜底确认（详见 probe_chat_key）。
+      if (isAuthError && isCustomEndpoint) {
+        try {
+          const probe = await probeChatKey(
+            normalizeAi302RootUrl(baseUrlInput),
+            trimmed,
+          );
+          if (probe.outcome === "ok") {
+            setVerify({ status: "ok", modelCount: 0, viaChat: true });
+            return;
+          }
+          if (probe.outcome === "unreachable") {
+            setVerify({ status: "fail", reason: "network" });
+            return;
+          }
+          // outcome === "authFailed" → 确实是 key 坏，落到下面 key 提示
+        } catch {
+          // 探活异常：退回原 /models 结论
+        }
+      }
+
       setVerify({ status: "fail", reason: isAuthError ? "key" : "network" });
     }
   };
@@ -189,10 +213,14 @@ export function Ai302KeyDialog({
         return (
           <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
             <CheckCircle2 className="h-4 w-4" />
-            {t("ai302.verifyOk", {
-              defaultValue: "Key 可用，{{num}} 个模型就绪",
-              num: verify.modelCount,
-            })}
+            {verify.viaChat
+              ? t("ai302.verifyOkChat", {
+                  defaultValue: "Key 可用（已通过对话接口验证）",
+                })
+              : t("ai302.verifyOk", {
+                  defaultValue: "Key 可用，{{num}} 个模型就绪",
+                  num: verify.modelCount,
+                })}
           </span>
         );
       case "fail":

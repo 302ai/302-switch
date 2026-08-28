@@ -73,6 +73,27 @@ export const geminiProviderPresets: GeminiProviderPreset[] = [
     iconColor: "#7C3AED",
   },
   {
+    // 企业私有化：302 企业版 / 私有部署。与上面的 302.AI 同款 Gemini 原生透传，
+    // 唯一区别是 base_url 留空，等用户填自己的私有部署地址（形如
+    // https://your-company.302.ai）。归 third_party，提示语要求同时填 Key 和地址。
+    name: "企业私有化",
+    nameKey: "providerPreset.enterprise",
+    websiteUrl: "https://302.ai",
+    apiKeyUrl: "https://302.ai",
+    settingsConfig: {
+      env: {
+        GOOGLE_GEMINI_BASE_URL: "",
+        GEMINI_API_KEY: "",
+        GEMINI_MODEL: "gemini-3.5-flash",
+      },
+    },
+    model: "gemini-3.5-flash",
+    description: "302.AI 企业私有化",
+    category: "third_party",
+    icon: "ai302",
+    iconColor: "#7C3AED",
+  },
+  {
     name: "自定义",
     websiteUrl: "",
     settingsConfig: {

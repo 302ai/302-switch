@@ -109,4 +109,24 @@ export const providerPresets: ProviderPreset[] = [
     icon: "ai302",
     iconColor: "#7C3AED",
   },
+  {
+    // 企业私有化：302 企业版 / 私有部署。写法与上面的 302.AI 完全一致（Anthropic
+    // 兼容层 + ANTHROPIC_API_KEY），唯一区别是 base_url 留空，等用户填自己的私有
+    // 部署地址（形如 https://your-company.302.ai）。归 third_party，提示语会要求
+    // 同时填 API Key 和请求地址。
+    name: "企业私有化",
+    nameKey: "providerPreset.enterprise",
+    websiteUrl: "https://302.ai",
+    apiKeyUrl: "https://302.ai",
+    apiKeyField: "ANTHROPIC_API_KEY",
+    settingsConfig: {
+      env: {
+        ANTHROPIC_BASE_URL: "",
+        ANTHROPIC_API_KEY: "",
+      },
+    },
+    category: "third_party",
+    icon: "ai302",
+    iconColor: "#7C3AED",
+  },
 ];

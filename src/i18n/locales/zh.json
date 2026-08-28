@@ -1337,6 +1337,7 @@
   "providerPreset": {
     "label": "预设供应商",
     "custom": "自定义配置",
+    "enterprise": "企业私有化",
     "other": "其他",
     "hint": "选择预设后可继续调整下方字段。",
     "searchTooltip": "搜索预设",
@@ -2964,6 +2965,7 @@
     "keyNetworkErrorEnterprise": "无法连接该地址，请检查 Base URL 是否正确",
     "enterpriseKeyHint": "在企业版管理后台生成 API Key",
     "keyOk": "Key 可用，已读取 {{count}} 个模型",
+    "keyOkChatVerified": "Key 可用（已通过对话接口验证）",
     "getKey": "前往 302.AI 获取 Key",
     "verifyAndDiagnose": "验证并诊断",
     "appsTitle": "选择要接入的客户端",
@@ -3008,6 +3010,7 @@
     "verify": "一键诊断",
     "verifying": "正在验证……",
     "verifyOk": "Key 可用，{{num}} 个模型就绪",
+    "verifyOkChat": "Key 可用（已通过对话接口验证）",
     "verifyNeedKey": "请先填写 Key 再验证",
     "verifyFailKey": "Key 无效或已过期",
     "verifyFailNetwork": "连不上 302.AI，请检查网络后重试",

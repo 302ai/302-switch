@@ -1308,6 +1308,7 @@
   "providerPreset": {
     "label": "預設供應商",
     "custom": "自訂設定",
+    "enterprise": "企業私有化",
     "other": "其他",
     "hint": "選擇預設後可繼續調整下方欄位。",
     "searchTooltip": "搜尋預設",
@@ -2935,6 +2936,7 @@
     "keyNetworkErrorEnterprise": "無法連接該地址，請檢查 Base URL 是否正確",
     "enterpriseKeyHint": "在企業版管理後台產生 API Key",
     "keyOk": "Key 可用，已讀取 {{count}} 個模型",
+    "keyOkChatVerified": "Key 可用（已透過對話介面驗證）",
     "getKey": "前往 302.AI 取得 Key",
     "verifyAndDiagnose": "驗證並診斷",
     "appsTitle": "選擇要連接的客戶端",
@@ -2979,6 +2981,7 @@
     "verify": "一鍵診斷",
     "verifying": "驗證中……",
     "verifyOk": "Key 可用，{{num}} 個模型就緒",
+    "verifyOkChat": "Key 可用（已透過對話介面驗證）",
     "verifyNeedKey": "請先填寫 Key 再驗證",
     "verifyFailKey": "Key 無效或已過期",
     "verifyFailNetwork": "無法連上 302.AI，請檢查網路後重試",

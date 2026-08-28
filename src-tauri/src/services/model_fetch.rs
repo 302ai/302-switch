@@ -198,6 +198,141 @@ pub fn build_models_url_candidates(
     Ok(unique)
 }
 
+// ───────────────────────── Chat 探活兜底 ─────────────────────────
+//
+// 背景：`fetch_models` 只探 GET /v1/models。企业私有化 / 自签中转网关经常
+// 压根不开放 /models 列表接口（只有 /chat/completions），于是验证 key 时被
+// 401/403 拒，前端误报「Key 无效」。这里补一条 POST /chat/completions 的
+// 探活：网关的通例是「先验鉴权、再校验模型」，所以哪怕故意发一个不存在的
+// 哨兵模型名，只要不是 401/403，就说明这把 key 鉴权是过的（哨兵模型触发
+// 404 / 400，不产生真实生成、不计费）。
+
+/// 探活用的哨兵模型名：故意不存在，用来在「鉴权已过」时触发 404/400 而非真实生成。
+const PROBE_SENTINEL_MODEL: &str = "__cc_switch_probe__";
+
+/// key 探活结论。区分「鉴权失败（key 坏）」「鉴权通过（key 有效）」「够不着（网络）」。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyProbeResult {
+    /// "ok" | "authFailed" | "unreachable"
+    pub outcome: String,
+    pub http_status: Option<u16>,
+    pub message: String,
+}
+
+impl KeyProbeResult {
+    fn ok(status: u16) -> Self {
+        Self {
+            outcome: "ok".to_string(),
+            http_status: Some(status),
+            message: String::new(),
+        }
+    }
+    fn auth_failed(status: u16, body: String) -> Self {
+        Self {
+            outcome: "authFailed".to_string(),
+            http_status: Some(status),
+            message: body,
+        }
+    }
+    fn unreachable(status: Option<u16>, message: String) -> Self {
+        Self {
+            outcome: "unreachable".to_string(),
+            http_status: status,
+            message,
+        }
+    }
+}
+
+/// 用 POST /chat/completions 探测一把 key 是否有效（鉴权层判定，不依赖 /models）。
+///
+/// `model` 传 `None` 时用哨兵模型名（不烧 token）；传具体模型则做一次真实最小请求。
+pub async fn probe_chat_key(
+    base_url: &str,
+    api_key: &str,
+    model: Option<&str>,
+    user_agent: Option<HeaderValue>,
+) -> Result<KeyProbeResult, String> {
+    if api_key.is_empty() {
+        return Err("API Key is required to probe".to_string());
+    }
+
+    let url = build_chat_completions_url(base_url)?;
+    let model_name = model
+        .map(str::trim)
+        .filter(|m| !m.is_empty())
+        .unwrap_or(PROBE_SENTINEL_MODEL);
+    let payload = serde_json::json!({
+        "model": model_name,
+        "messages": [{ "role": "user", "content": "ping" }],
+        "max_tokens": 1,
+        "stream": false,
+    });
+
+    let client = crate::proxy::http_client::get();
+    let mut request = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {api_key}"))
+        .header("Content-Type", "application/json")
+        .json(&payload)
+        .timeout(Duration::from_secs(FETCH_TIMEOUT_SECS));
+    if let Some(ua) = &user_agent {
+        request = request.header(USER_AGENT, ua.clone());
+    }
+
+    let response = match request.send().await {
+        Ok(r) => r,
+        Err(e) => {
+            return Ok(KeyProbeResult::unreachable(
+                None,
+                format!("Request failed: {e}"),
+            ))
+        }
+    };
+
+    let status = response.status();
+    // 鉴权失败时读一段截断 body，保留网关自定义的错误信息方便排查；其余情况不需要 body。
+    if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
+        let body = truncate_body(response.text().await.unwrap_or_default());
+        return Ok(KeyProbeResult::auth_failed(status.as_u16(), body));
+    }
+    Ok(classify_probe_status(status))
+}
+
+/// 把 chat 探活的 HTTP 状态码翻译成 key 探活结论。
+///
+/// - 401 / 403 → 鉴权失败（key 坏或没权限）
+/// - 2xx / 429 → 鉴权通过（429 说明认证成功只是被限流）
+/// - 其它 4xx（400/404/405/422…）→ 鉴权通过：哨兵模型或路由问题，但请求已过认证层
+/// - 5xx / 其它 → 够不着 / 服务器异常，结论不确定，按 unreachable 处理（不误报 key 坏）
+///
+/// 注意：调用处对 401/403 会先读一段 body 再走 [`KeyProbeResult::auth_failed`]，
+/// 这里同样把 401/403 归为 authFailed（body 为空），保证函数自洽、可单测。
+fn classify_probe_status(status: StatusCode) -> KeyProbeResult {
+    let code = status.as_u16();
+    if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
+        return KeyProbeResult::auth_failed(code, String::new());
+    }
+    if status.is_success() || status == StatusCode::TOO_MANY_REQUESTS || status.is_client_error() {
+        return KeyProbeResult::ok(code);
+    }
+    KeyProbeResult::unreachable(Some(code), format!("HTTP {status}"))
+}
+
+/// 构造 chat/completions 探活 URL：baseURL 已以 `/v{N}` 结尾则直接拼
+/// `/chat/completions`，否则补 `/v1/chat/completions`。
+fn build_chat_completions_url(base_url: &str) -> Result<String, String> {
+    let trimmed = base_url.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return Err("Base URL is empty".to_string());
+    }
+    if ends_with_version_segment(trimmed) {
+        Ok(format!("{trimmed}/chat/completions"))
+    } else {
+        Ok(format!("{trimmed}/v1/chat/completions"))
+    }
+}
+
 /// 截断响应体到 [`ERROR_BODY_MAX_CHARS`] 字符，避免 HTML 404 页占用错误串。
 fn truncate_body(body: String) -> String {
     if body.chars().count() <= ERROR_BODY_MAX_CHARS {
@@ -473,5 +608,69 @@ mod tests {
         let json = r#"{"object":"list","data":[]}"#;
         let resp: ModelsResponse = serde_json::from_str(json).unwrap();
         assert!(resp.data.unwrap().is_empty());
+    }
+
+    // ── chat 探活 ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_chat_completions_url_plain_root() {
+        assert_eq!(
+            build_chat_completions_url("http://42.240.165.205:3020").unwrap(),
+            "http://42.240.165.205:3020/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn test_chat_completions_url_trailing_slash_and_v1() {
+        // 用户填的 base 常以 /v1 结尾（后台复制的），不能拼成 /v1/v1/chat/completions
+        assert_eq!(
+            build_chat_completions_url("http://42.240.165.205:3020/v1/").unwrap(),
+            "http://42.240.165.205:3020/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn test_chat_completions_url_empty() {
+        assert!(build_chat_completions_url("   ").is_err());
+    }
+
+    #[test]
+    fn test_classify_probe_auth_failed() {
+        // 401/403 是唯一判「key 坏」的信号
+        assert_eq!(
+            classify_probe_status(StatusCode::UNAUTHORIZED).outcome,
+            "authFailed"
+        );
+        assert_eq!(
+            classify_probe_status(StatusCode::FORBIDDEN).outcome,
+            "authFailed"
+        );
+    }
+
+    #[test]
+    fn test_classify_probe_ok() {
+        // 200 = 真通；404/400 = 哨兵模型触发但鉴权已过；429 = 认证成功只是被限流
+        for s in [
+            StatusCode::OK,
+            StatusCode::NOT_FOUND,
+            StatusCode::BAD_REQUEST,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            StatusCode::TOO_MANY_REQUESTS,
+        ] {
+            assert_eq!(
+                classify_probe_status(s).outcome,
+                "ok",
+                "status {s} should be ok"
+            );
+        }
+    }
+
+    #[test]
+    fn test_classify_probe_server_error_unreachable() {
+        // 5xx 结论不确定，不能误报 key 坏
+        assert_eq!(
+            classify_probe_status(StatusCode::BAD_GATEWAY).outcome,
+            "unreachable"
+        );
     }
 }
