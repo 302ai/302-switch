@@ -3478,7 +3478,9 @@ trust_level = "trusted"
         let parsed: toml::Value = toml::from_str(&cleaned).unwrap();
         assert!(parsed.get("projects").is_some(), "无关段落不能被误删");
         assert_eq!(
-            parsed.get("disable_response_storage").and_then(|v| v.as_bool()),
+            parsed
+                .get("disable_response_storage")
+                .and_then(|v| v.as_bool()),
             Some(true)
         );
     }
