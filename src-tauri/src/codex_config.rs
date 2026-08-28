@@ -1694,6 +1694,46 @@ pub fn strip_codex_unified_session_bucket_from_settings(
     Ok(())
 }
 
+/// 官方 Codex 供应商本该走 ChatGPT OAuth，不该携带任何第三方 `model_provider`。
+///
+/// 历史遗留：official 的存储快照若在 302 等第三方激活时被抓取（takeover/首次
+/// 快照），会把 `model_provider = "custom"` + `[model_providers.custom]`（302 的
+/// base_url + bearer）一起烘焙进去。切回 official 时这份「中毒快照」被原样写回
+/// live，于是「UI 显示官方、请求实际走 302、计费也算在 302 头上」。
+///
+/// 这里在写 official live 前，把**活跃的非保留** `model_provider`（及其块）剥掉，
+/// 让路由回落到官方登录。desktop 自带的 plugins / mcp_servers / marketplaces 等其它
+/// 段落一律不动。保留 id（openai 等）或没有活跃第三方 provider 时原样返回。
+pub fn strip_codex_third_party_model_provider(config_text: &str) -> Result<String, AppError> {
+    if config_text.trim().is_empty() || !config_text.contains("model_provider") {
+        return Ok(config_text.to_string());
+    }
+    let mut doc = config_text
+        .parse::<DocumentMut>()
+        .map_err(|e| AppError::Message(format!("Invalid Codex config.toml: {e}")))?;
+
+    let Some(active_id) = active_codex_model_provider_id(&doc) else {
+        return Ok(config_text.to_string());
+    };
+    if !is_custom_codex_model_provider_id(&active_id) {
+        return Ok(config_text.to_string());
+    }
+
+    doc.as_table_mut().remove("model_provider");
+    let providers_empty = doc
+        .get_mut("model_providers")
+        .and_then(|item| item.as_table_mut())
+        .map(|providers| {
+            providers.remove(&active_id);
+            providers.is_empty()
+        })
+        .unwrap_or(false);
+    if providers_empty {
+        doc.as_table_mut().remove("model_providers");
+    }
+    Ok(doc.to_string())
+}
+
 /// Backfill helper: strip `[mcp_servers]` from a live `{ auth, config }`
 /// settings object before it is stored back to the DB.
 ///
@@ -1746,6 +1786,19 @@ pub fn write_codex_live_for_provider(
     auth: &Value,
     config_text: Option<&str>,
 ) -> Result<(), AppError> {
+    // 官方供应商不该带任何第三方 model_provider。中毒快照（在 302 等激活时抓取）
+    // 会把 302 块写回 live，导致「UI 官方、实际走 302」。落盘/注入统一会话桶之前，
+    // 先剥掉活跃的非保留 model_provider，让路由回落官方登录。
+    let sanitized_official = if category == Some("official") {
+        match config_text {
+            Some(text) => Some(strip_codex_third_party_model_provider(text)?),
+            None => None,
+        }
+    } else {
+        None
+    };
+    let config_text = sanitized_official.as_deref().or(config_text);
+
     let unified_official_config =
         if category == Some("official") && crate::settings::unify_codex_session_history() {
             Some(inject_codex_unified_session_bucket(
@@ -3395,5 +3448,50 @@ model_catalog_json = "cc-switch-model-catalog.json"
             parsed.get("model_catalog_json").is_none(),
             "None arm should remove relative cc-switch-owned field"
         );
+    }
+
+    // 复刻线上 bug：official 快照被 302 污染（switch 到官方却仍走 302）。
+    #[test]
+    fn strip_third_party_provider_cleans_poisoned_official_snapshot() {
+        let poisoned = r#"model_provider = "custom"
+disable_response_storage = true
+
+[model_providers.custom]
+name = "302ai"
+base_url = "https://api.302.ai/v1"
+wire_api = "responses"
+experimental_bearer_token = "sk-secret"
+
+[projects."/x"]
+trust_level = "trusted"
+"#;
+        let cleaned = strip_codex_third_party_model_provider(poisoned).unwrap();
+        assert!(
+            !cleaned.contains("302.ai") && !cleaned.contains("model_providers.custom"),
+            "第三方 302 块应被剥掉，路由回落官方\n{cleaned}"
+        );
+        assert!(
+            !cleaned.contains("model_provider ="),
+            "活跃指针应被移除，Codex 回落 ChatGPT 官方登录"
+        );
+        // desktop 自带的其它段落必须保留
+        let parsed: toml::Value = toml::from_str(&cleaned).unwrap();
+        assert!(parsed.get("projects").is_some(), "无关段落不能被误删");
+        assert_eq!(
+            parsed.get("disable_response_storage").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+    }
+
+    // 保留 id（openai 等官方）不能被误伤。
+    #[test]
+    fn strip_third_party_provider_leaves_reserved_official_untouched() {
+        let official = r#"model_provider = "openai"
+
+[model_providers.openai]
+name = "OpenAI"
+"#;
+        let result = strip_codex_third_party_model_provider(official).unwrap();
+        assert_eq!(result, official, "官方/保留 provider 应原样返回");
     }
 }
