@@ -142,6 +142,7 @@
     "managedByHermes": "Hermes 託管",
     "managedByHermesHint": "該專案定義於 Hermes 的 providers: dict，請在 Hermes Web UI 中編輯或刪除。",
     "ai302ProtectedHint": "302.AI 預設供應商不可刪除",
+    "officialLockedHint": "官方供應商已鎖定，始終連接官方且不可編輯",
     "openTerminal": "開啟終端機",
     "terminalOpened": "終端機已開啟",
     "terminalOpenFailed": "開啟終端機失敗",
@@ -2061,7 +2062,13 @@
   "env": {
     "warning": {
       "title": "檢測到系統環境變數衝突",
-      "description": "發現 {{count}} 個環境變數可能會覆寫您的設定"
+      "description": "發現 {{count}} 個環境變數可能會覆寫您的設定",
+      "impact": "這些環境變數的優先級高於本應用寫入的設定，會覆寫你在這裡選擇的供應商，導致切換看起來沒有生效。"
+    },
+    "group": {
+      "fileHint": "來自設定檔，可安全刪除（自動備份、可還原）",
+      "processTitle": "來自進程 / 系統環境（無法在此刪除）",
+      "processHint": "這些變數不在設定檔裡，無法從這裡刪除。要讓切換生效：在設定它們的地方取消，或從一個乾淨的新終端機啟動應用。"
     },
     "actions": {
       "expand": "查看詳情",

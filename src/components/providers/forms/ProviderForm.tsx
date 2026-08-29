@@ -1901,6 +1901,36 @@ function ProviderFormFull({
     Boolean(enterpriseProfile?.baseUrl?.trim());
   const hasStoredEnterpriseKey = Boolean(enterpriseProfile?.apiKey?.trim());
 
+  // 「填入上次的 Key」按钮改挂在 Key 输入框正下方（通过 apiKeyAfterSlot 插槽），
+  // 而不是飘在表单顶部——顶部只留「Base URL 已回填」这条与地址相关的提示。
+  const enterpriseKeyPrefillSlot =
+    showEnterprisePrefill && hasStoredEnterpriseKey ? (
+      enterpriseKeyFilled ? (
+        <span className="inline-flex items-center text-xs text-primary">
+          {t("providerForm.enterprisePrefill.keyFilled", {
+            defaultValue: "已填入上次的 Key",
+          })}
+        </span>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7"
+          onClick={() =>
+            selectedPresetId &&
+            handlePresetChange(selectedPresetId, {
+              fillEnterpriseKey: true,
+            })
+          }
+        >
+          {t("providerForm.enterprisePrefill.fillKey", {
+            defaultValue: "填入上次的 Key",
+          })}
+        </Button>
+      )
+    ) : null;
+
   return (
     <>
       <Form {...form}>
@@ -1922,38 +1952,13 @@ function ProviderFormFull({
           )}
 
           {showEnterprisePrefill && (
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+            <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
               <span className="text-muted-foreground">
                 {t("providerForm.enterprisePrefill.hint", {
                   defaultValue:
                     "已按上次填写回填私有部署地址（Base URL）。API Key 需你自己填。",
                 })}
               </span>
-              {hasStoredEnterpriseKey &&
-                (enterpriseKeyFilled ? (
-                  <span className="shrink-0 text-primary">
-                    {t("providerForm.enterprisePrefill.keyFilled", {
-                      defaultValue: "已填入上次的 Key",
-                    })}
-                  </span>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 shrink-0"
-                    onClick={() =>
-                      selectedPresetId &&
-                      handlePresetChange(selectedPresetId, {
-                        fillEnterpriseKey: true,
-                      })
-                    }
-                  >
-                    {t("providerForm.enterprisePrefill.fillKey", {
-                      defaultValue: "填入上次的 Key",
-                    })}
-                  </Button>
-                ))}
             </div>
           )}
 
@@ -2184,6 +2189,7 @@ function ProviderFormFull({
               websiteUrl={claudeWebsiteUrl}
               isPartner={isClaudePartner}
               partnerPromotionKey={claudePartnerPromotionKey}
+              apiKeyAfterSlot={enterpriseKeyPrefillSlot}
               isCopilotPreset={
                 templatePreset?.providerType === "github_copilot" ||
                 initialData?.meta?.providerType === "github_copilot" ||
@@ -2262,6 +2268,7 @@ function ProviderFormFull({
               websiteUrl={codexWebsiteUrl}
               isPartner={isCodexPartner}
               partnerPromotionKey={codexPartnerPromotionKey}
+              apiKeyAfterSlot={enterpriseKeyPrefillSlot}
               shouldShowSpeedTest={shouldShowSpeedTest}
               codexBaseUrl={codexBaseUrl}
               onBaseUrlChange={handleCodexBaseUrlChange}
@@ -2304,6 +2311,7 @@ function ProviderFormFull({
               websiteUrl={geminiWebsiteUrl}
               isPartner={isGeminiPartner}
               partnerPromotionKey={geminiPartnerPromotionKey}
+              apiKeyAfterSlot={enterpriseKeyPrefillSlot}
               shouldShowSpeedTest={shouldShowSpeedTest}
               baseUrl={geminiBaseUrl}
               onBaseUrlChange={handleGeminiBaseUrlChange}

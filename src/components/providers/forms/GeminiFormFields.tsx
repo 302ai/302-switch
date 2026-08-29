@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { FormLabel } from "@/components/ui/form";
 import { Download, Info, Loader2 } from "lucide-react";
@@ -28,6 +28,7 @@ interface GeminiFormFieldsProps {
   websiteUrl: string;
   isPartner?: boolean;
   partnerPromotionKey?: string;
+  apiKeyAfterSlot?: ReactNode;
 
   // Base URL
   shouldShowSpeedTest: boolean;
@@ -58,6 +59,7 @@ export function GeminiFormFields({
   websiteUrl,
   isPartner,
   partnerPromotionKey,
+  apiKeyAfterSlot,
   shouldShowSpeedTest,
   baseUrl,
   onBaseUrlChange,
@@ -141,6 +143,7 @@ export function GeminiFormFields({
           websiteUrl={websiteUrl}
           isPartner={isPartner}
           partnerPromotionKey={partnerPromotionKey}
+          afterInputSlot={apiKeyAfterSlot}
         />
       )}
 

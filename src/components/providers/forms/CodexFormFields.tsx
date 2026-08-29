@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { FormLabel } from "@/components/ui/form";
@@ -56,6 +56,7 @@ interface CodexFormFieldsProps {
   websiteUrl: string;
   isPartner?: boolean;
   partnerPromotionKey?: string;
+  apiKeyAfterSlot?: ReactNode;
 
   // Base URL
   shouldShowSpeedTest: boolean;
@@ -146,6 +147,7 @@ export function CodexFormFields({
   websiteUrl,
   isPartner,
   partnerPromotionKey,
+  apiKeyAfterSlot,
   shouldShowSpeedTest,
   codexBaseUrl,
   onBaseUrlChange,
@@ -357,6 +359,7 @@ export function CodexFormFields({
         websiteUrl={websiteUrl}
         isPartner={isPartner}
         partnerPromotionKey={partnerPromotionKey}
+        afterInputSlot={apiKeyAfterSlot}
         placeholder={{
           official: t("providerForm.codexOfficialNoApiKey", {
             defaultValue: "官方供应商无需 API Key",

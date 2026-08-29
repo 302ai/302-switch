@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import ApiKeyInput from "../ApiKeyInput";
 import type { ProviderCategory } from "@/types";
@@ -17,6 +18,8 @@ interface ApiKeySectionProps {
   disabled?: boolean;
   isPartner?: boolean;
   partnerPromotionKey?: string;
+  // 紧贴 Key 输入框下方的插槽（用于企业私有化「填入上次的 Key」按钮等）
+  afterInputSlot?: ReactNode;
 }
 
 export function ApiKeySection({
@@ -30,6 +33,7 @@ export function ApiKeySection({
   placeholder,
   disabled,
   partnerPromotionKey,
+  afterInputSlot,
 }: ApiKeySectionProps) {
   const { t } = useTranslation();
 
@@ -58,6 +62,7 @@ export function ApiKeySection({
         }
         disabled={disabled ?? category === "official"}
       />
+      {afterInputSlot}
       {/* API Key 获取链接 */}
       {shouldShowLink && websiteUrl && (
         <div className="space-y-2 -mt-1 pl-1">

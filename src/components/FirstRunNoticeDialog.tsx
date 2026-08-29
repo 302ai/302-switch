@@ -61,6 +61,7 @@ import {
   getAi302ModelStrategy,
   getAi302RegionBaseUrl,
   getAi302SeedId,
+  isAi302SeedProvider,
   isValidAi302BaseUrl,
   normalizeAi302RootUrl,
   readAi302ApiKey,
@@ -197,8 +198,23 @@ function guessDefaultRegion(): Ai302Region {
   return "global";
 }
 
-// 企业版复用海外槽位改写地址，provider 名字也一起改，方便用户以后在供应商卡片上
-// 认出"这是我司自己的部署"，而不是误以为还连着 302.AI 公共接口。
+// 企业私有化跟 302 公共接口无关，必须是"另起的一张独立卡"，绝不能改写 302 国内/海外
+// 种子。按官网链接（= 私有根地址）定位已建过的企业卡，做到：引导重跑 / 一键诊断不会
+// 重复建卡，也不会误碰 302 那两张。排除 302 种子与官方卡（它们的 websiteUrl 不是私有地址）。
+function findEnterpriseProvider(
+  providers: Record<string, Provider>,
+  root: string,
+): Provider | undefined {
+  return Object.values(providers).find(
+    (p) =>
+      p.websiteUrl === root &&
+      !isAi302SeedProvider(p) &&
+      p.category !== "official",
+  );
+}
+
+// 企业卡的显示名字，方便用户以后在供应商卡片上认出"这是我司自己的部署"，
+// 而不是误以为还连着 302.AI 公共接口。
 function enterpriseProviderLabel(root: string): string {
   try {
     return `302.AI（企业版 · ${new URL(root).host}）`;
@@ -534,12 +550,66 @@ export function FirstRunNoticeDialog() {
   const configureApp = useCallback(
     async (appId: Ai302OnboardingApp): Promise<ConfigureResult> => {
       try {
-        const seedId = getAi302SeedId(
-          appId,
-          edition === "enterprise" ? "global" : region,
-        );
         const providers = await providersApi.getAll(appId);
-        const provider = providers[seedId];
+
+        // 计算本 app 要落库的 settingsConfig：以某张 302 种子的"配置形状"为模板
+        // （claude 走 env、codex 走 TOML+/v1、gemini 走 env），写入 key + 地址。
+        const buildConfig = (template: Provider): Record<string, unknown> => {
+          let config = writeAi302ApiKey(
+            appId,
+            template.settingsConfig as Record<string, unknown>,
+            apiKey.trim(),
+          );
+          config = writeAi302BaseUrl(appId, config, resolvedBaseUrlRoot);
+          if (appId === "claude") {
+            config = applyClaudeModelMode(config, modelMode, fixedModels);
+          }
+          return config;
+        };
+
+        if (edition === "enterprise") {
+          // 企业版：用海外种子当"形状模板"，建/更一张独立企业卡，绝不改写 302 种子。
+          const template = providers[getAi302SeedId(appId, "global")];
+          if (!template) {
+            throw new Error(
+              t("onboarding.presetMissing", {
+                app: APP_DETAILS[appId].name,
+                defaultValue: `${APP_DETAILS[appId].name} 的 302.AI 预设不存在`,
+              }),
+            );
+          }
+          const settingsConfig = buildConfig(template);
+          const existing = findEnterpriseProvider(providers, resolvedBaseUrlRoot);
+          const enterprise: Provider = {
+            ...(existing ?? {}),
+            id: existing?.id ?? generateUUID(),
+            name: enterpriseProviderLabel(resolvedBaseUrlRoot),
+            websiteUrl: resolvedBaseUrlRoot,
+            category: "third_party",
+            settingsConfig,
+            icon: existing?.icon ?? template.icon,
+            iconColor: existing?.iconColor ?? template.iconColor,
+          } as Provider;
+
+          if (existing) {
+            await providersApi.update(enterprise, appId, existing.id);
+          } else {
+            await providersApi.add(enterprise, appId, false);
+          }
+          await providersApi.switch(enterprise.id, appId);
+
+          let reachable = false;
+          try {
+            const check = await streamCheckProvider(appId, enterprise.id);
+            reachable = check.status !== "failed";
+          } catch {
+            reachable = false;
+          }
+          return { appId, success: true, reachable };
+        }
+
+        // 公共版：把选中区域（国内/海外）的 302 种子填上 key + 地址，另一张原样保留。
+        const provider = providers[getAi302SeedId(appId, region)];
         if (!provider) {
           throw new Error(
             t("onboarding.presetMissing", {
@@ -548,36 +618,11 @@ export function FirstRunNoticeDialog() {
             }),
           );
         }
-
-        let settingsConfig = writeAi302ApiKey(
-          appId,
-          provider.settingsConfig as Record<string, unknown>,
-          apiKey.trim(),
-        );
-        // 地址、名字、官网链接每次都按当前选择重写——公共版和企业版复用同一个
-        // 种子槽位（企业版落在"海外"槽位上），如果只在切到企业版时才覆盖，
-        // 上一次企业版残留的地址/名字会在切回公共版后原样留着。
-        settingsConfig = writeAi302BaseUrl(
-          appId,
-          settingsConfig,
-          resolvedBaseUrlRoot,
-        );
-        if (appId === "claude") {
-          settingsConfig = applyClaudeModelMode(
-            settingsConfig,
-            modelMode,
-            fixedModels,
-          );
-        }
-
         const updated: Provider = {
           ...provider,
-          name:
-            edition === "enterprise"
-              ? enterpriseProviderLabel(resolvedBaseUrlRoot)
-              : ai302RegionProviderLabel(region),
+          name: ai302RegionProviderLabel(region),
           websiteUrl: resolvedBaseUrlRoot,
-          settingsConfig,
+          settingsConfig: buildConfig(provider),
         };
         await providersApi.update(updated, appId, provider.id);
         await providersApi.switch(provider.id, appId);
@@ -672,12 +717,12 @@ export function FirstRunNoticeDialog() {
       const results = await Promise.all(
         selectedApps.map(async (appId): Promise<ConfigureResult> => {
           try {
-            const seedId = getAi302SeedId(
-              appId,
-              edition === "enterprise" ? "global" : region,
-            );
             const providers = await providersApi.getAll(appId);
-            const provider = providers[seedId];
+            // 企业版查那张独立企业卡，公共版查选中区域的种子——和 configureApp 落库口径一致。
+            const provider =
+              edition === "enterprise"
+                ? findEnterpriseProvider(providers, resolvedBaseUrlRoot)
+                : providers[getAi302SeedId(appId, region)];
             if (!provider) {
               throw new Error(
                 t("onboarding.presetMissing", {
@@ -701,7 +746,7 @@ export function FirstRunNoticeDialog() {
 
             let reachable = false;
             try {
-              const check = await streamCheckProvider(appId, seedId);
+              const check = await streamCheckProvider(appId, provider.id);
               reachable = check.status !== "failed";
             } catch {
               reachable = false;
@@ -725,7 +770,16 @@ export function FirstRunNoticeDialog() {
     } finally {
       setIsDiagnosing(false);
     }
-  }, [apiKey, detectTools, edition, region, selectedApps, t, verifyKey]);
+  }, [
+    apiKey,
+    detectTools,
+    edition,
+    region,
+    resolvedBaseUrlRoot,
+    selectedApps,
+    t,
+    verifyKey,
+  ]);
 
   const copyInstallCommand = useCallback(
     async (command: string) => {

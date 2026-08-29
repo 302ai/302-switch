@@ -38,6 +38,13 @@ export function EnvWarningBanner({
     return null;
   }
 
+  // 两类来源区别对待：
+  // - file：写在 .zshrc 等配置文件里 → 能真的删（改文件、自动备份、可恢复）。
+  // - system：飘在进程/系统环境里 → 在 macOS 根本删不掉（详见 env_manager 的 no-op），
+  //   所以这类只展示 + 给出人话引导，不给勾选和删除按钮，免得用户以为删了其实没删。
+  const fileConflicts = conflicts.filter((c) => c.sourceType === "file");
+  const envConflicts = conflicts.filter((c) => c.sourceType !== "file");
+
   const toggleSelection = (key: string) => {
     const newSelection = new Set(selectedConflicts);
     if (newSelection.has(key)) {
@@ -48,12 +55,15 @@ export function EnvWarningBanner({
     setSelectedConflicts(newSelection);
   };
 
+  // 全选只针对「文件来源」——进程来源不可删，不进选择集。
+  const allFilesSelected =
+    fileConflicts.length > 0 && selectedConflicts.size === fileConflicts.length;
   const toggleSelectAll = () => {
-    if (selectedConflicts.size === conflicts.length) {
+    if (allFilesSelected) {
       setSelectedConflicts(new Set());
     } else {
       setSelectedConflicts(
-        new Set(conflicts.map((c) => `${c.varName}:${c.sourcePath}`)),
+        new Set(fileConflicts.map((c) => `${c.varName}:${c.sourcePath}`)),
       );
     }
   };
@@ -159,81 +169,140 @@ export function EnvWarningBanner({
               </div>
 
               {isExpanded && (
-                <div className="mt-4 space-y-3">
-                  <div className="flex items-center gap-2 pb-2 border-b border-yellow-200 dark:border-yellow-900/50">
-                    <Checkbox
-                      id="select-all"
-                      checked={selectedConflicts.size === conflicts.length}
-                      onCheckedChange={toggleSelectAll}
-                    />
-                    <label
-                      htmlFor="select-all"
-                      className="text-sm font-medium text-yellow-900 dark:text-yellow-100 cursor-pointer"
-                    >
-                      {t("env.actions.selectAll")}
-                    </label>
-                  </div>
-
-                  <div className="max-h-96 overflow-y-auto space-y-2">
-                    {conflicts.map((conflict) => {
-                      const key = `${conflict.varName}:${conflict.sourcePath}`;
-                      return (
-                        <div
-                          key={key}
-                          className="flex items-start gap-3 p-3 bg-white dark:bg-gray-900 rounded-md border border-yellow-200 dark:border-yellow-900/50"
-                        >
-                          <Checkbox
-                            id={key}
-                            checked={selectedConflicts.has(key)}
-                            onCheckedChange={() => toggleSelection(key)}
-                          />
-
-                          <div className="flex-1 min-w-0">
-                            <label
-                              htmlFor={key}
-                              className="block text-sm font-medium text-foreground cursor-pointer"
-                            >
-                              {conflict.varName}
-                            </label>
-                            <p className="text-xs text-muted-foreground mt-1 break-all">
-                              {t("env.field.value")}: {conflict.varValue}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {t("env.field.source")}:{" "}
-                              {getSourceDescription(conflict)}
-                            </p>
-                          </div>
-                        </div>
-                      );
+                <div className="mt-4 space-y-4">
+                  {/* 冲突到底会怎样：让用户明白横幅在担心什么 */}
+                  <p className="text-xs leading-relaxed text-yellow-800 dark:text-yellow-200">
+                    {t("env.warning.impact", {
+                      defaultValue:
+                        "这些环境变量的优先级高于本应用写入的配置，会覆盖你在这里选择的供应商，导致切换看起来不生效。",
                     })}
-                  </div>
+                  </p>
 
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-yellow-200 dark:border-yellow-900/50">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSelectedConflicts(new Set())}
-                      disabled={selectedConflicts.size === 0}
-                      className="text-yellow-900 dark:text-yellow-100 border-yellow-300 dark:border-yellow-800"
-                    >
-                      {t("env.actions.clearSelection")}
-                    </Button>
-
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => setShowConfirmDialog(true)}
-                      disabled={selectedConflicts.size === 0 || isDeleting}
-                      className="gap-1"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      {isDeleting
-                        ? t("env.actions.deleting")
-                        : t("env.actions.deleteSelected", {
-                            count: selectedConflicts.size,
+                  {/* 可删除：来自配置文件 */}
+                  {fileConflicts.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3 pb-2 border-b border-yellow-200 dark:border-yellow-900/50">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id="select-all"
+                            checked={allFilesSelected}
+                            onCheckedChange={toggleSelectAll}
+                          />
+                          <label
+                            htmlFor="select-all"
+                            className="text-sm font-medium text-yellow-900 dark:text-yellow-100 cursor-pointer"
+                          >
+                            {t("env.actions.selectAll")}
+                          </label>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {t("env.group.fileHint", {
+                            defaultValue: "来自配置文件，可安全删除（自动备份、可恢复）",
                           })}
-                    </Button>
-                  </div>
+                        </span>
+                      </div>
+
+                      <div className="max-h-72 overflow-y-auto space-y-2">
+                        {fileConflicts.map((conflict) => {
+                          const key = `${conflict.varName}:${conflict.sourcePath}`;
+                          return (
+                            <div
+                              key={key}
+                              className="flex items-start gap-3 p-3 bg-white dark:bg-gray-900 rounded-md border border-yellow-200 dark:border-yellow-900/50"
+                            >
+                              <Checkbox
+                                id={key}
+                                checked={selectedConflicts.has(key)}
+                                onCheckedChange={() => toggleSelection(key)}
+                              />
+
+                              <div className="flex-1 min-w-0">
+                                <label
+                                  htmlFor={key}
+                                  className="block text-sm font-medium text-foreground cursor-pointer"
+                                >
+                                  {conflict.varName}
+                                </label>
+                                <p className="text-xs text-muted-foreground mt-1 break-all">
+                                  {t("env.field.value")}: {conflict.varValue}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {t("env.field.source")}:{" "}
+                                  {getSourceDescription(conflict)}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-yellow-200 dark:border-yellow-900/50">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedConflicts(new Set())}
+                          disabled={selectedConflicts.size === 0}
+                          className="text-yellow-900 dark:text-yellow-100 border-yellow-300 dark:border-yellow-800"
+                        >
+                          {t("env.actions.clearSelection")}
+                        </Button>
+
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => setShowConfirmDialog(true)}
+                          disabled={selectedConflicts.size === 0 || isDeleting}
+                          className="gap-1"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          {isDeleting
+                            ? t("env.actions.deleting")
+                            : t("env.actions.deleteSelected", {
+                                count: selectedConflicts.size,
+                              })}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 不可删除：来自进程 / 系统环境——只展示 + 引导，不给删除 */}
+                  {envConflicts.length > 0 && (
+                    <div className="space-y-2 rounded-md border border-yellow-200 dark:border-yellow-900/50 p-3">
+                      <div className="text-sm font-medium text-yellow-900 dark:text-yellow-100">
+                        {t("env.group.processTitle", {
+                          defaultValue: "来自进程 / 系统环境（无法在此删除）",
+                        })}
+                      </div>
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        {t("env.group.processHint", {
+                          defaultValue:
+                            "这些变量不在配置文件里，无法从这里删除。要让切换生效：在设置它们的地方取消，或从一个干净的新终端启动应用。",
+                        })}
+                      </p>
+                      <div className="space-y-2 pt-1">
+                        {envConflicts.map((conflict) => {
+                          const key = `${conflict.varName}:${conflict.sourcePath}`;
+                          return (
+                            <div
+                              key={key}
+                              className="p-3 bg-white dark:bg-gray-900 rounded-md border border-yellow-200 dark:border-yellow-900/50"
+                            >
+                              <div className="text-sm font-medium text-foreground">
+                                {conflict.varName}
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1 break-all">
+                                {t("env.field.value")}: {conflict.varValue}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {t("env.field.source")}:{" "}
+                                {getSourceDescription(conflict)}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

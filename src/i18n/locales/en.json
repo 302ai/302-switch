@@ -142,6 +142,7 @@
     "managedByHermes": "Hermes Managed",
     "managedByHermesHint": "Defined in Hermes' providers: dict. Edit or remove it via Hermes Web UI.",
     "ai302ProtectedHint": "The built-in 302.AI provider cannot be deleted",
+    "officialLockedHint": "The official provider is locked — it always connects to official and can't be edited",
     "openTerminal": "Open Terminal",
     "terminalOpened": "Terminal opened",
     "terminalOpenFailed": "Failed to open terminal",
@@ -2090,7 +2091,13 @@
   "env": {
     "warning": {
       "title": "Environment Variable Conflicts Detected",
-      "description": "Found {{count}} environment variables that may override your configuration"
+      "description": "Found {{count}} environment variables that may override your configuration",
+      "impact": "These environment variables take priority over the config this app writes, so they override the provider you pick here and make switching look like it did nothing."
+    },
+    "group": {
+      "fileHint": "From a config file — safe to delete (auto-backed up, reversible)",
+      "processTitle": "From the process / system environment (can't be deleted here)",
+      "processHint": "These aren't in any config file, so they can't be deleted here. To make switching take effect: unset them where they're defined, or launch the app from a clean new terminal."
     },
     "actions": {
       "expand": "View Details",

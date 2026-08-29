@@ -607,6 +607,15 @@ pub fn run() {
                 Err(e) => log::warn!("✗ Failed to seed official providers: {e}"),
             }
 
+            // 官方卡自愈：把被写脏的 Anthropic 官方卡拉回干净空配置（详见函数注释）
+            match app_state.db.normalize_anthropic_official_providers() {
+                Ok(count) if count > 0 => {
+                    log::info!("✓ Reset {count} polluted official provider(s) to clean state");
+                }
+                Ok(_) => {}
+                Err(e) => log::warn!("✗ Failed to normalize official providers: {e}"),
+            }
+
             // 302.AI 聚合供应商（无 key 占位）：独立 flag，老库也能补种
             match app_state.db.init_ai302_providers() {
                 Ok(count) if count > 0 => {

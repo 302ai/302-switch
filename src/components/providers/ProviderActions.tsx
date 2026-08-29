@@ -41,6 +41,8 @@ interface ProviderActionsProps {
   isReadOnly?: boolean;
   // 302.AI 内置种子：产品招牌入口，不可删除
   isProtected?: boolean;
+  // Anthropic 官方卡：必须永远是干净官方，禁止编辑（避免被写进第三方地址/key）
+  isOfficialLocked?: boolean;
   // OpenClaw: default model
   isDefaultModel?: boolean;
   onSetAsDefault?: () => void;
@@ -80,12 +82,18 @@ export function ProviderActions({
   isOfficialBlockedByProxy = false,
   isReadOnly = false,
   isProtected = false,
+  isOfficialLocked = false,
   // OpenClaw: default model
   isDefaultModel = false,
   onSetAsDefault,
 }: ProviderActionsProps) {
   const { t } = useTranslation();
   const iconButtonClass = "h-8 w-8 p-1";
+  // 只读（Hermes）或官方锁定都禁止编辑；官方锁定给自己的解释文案
+  const editDisabled = isReadOnly || isOfficialLocked;
+  const officialLockedHint = t("provider.officialLockedHint", {
+    defaultValue: "官方供应商已锁定，始终连接官方且不可编辑",
+  });
 
   // 累加模式应用（OpenCode 非 OMO / OpenClaw / Hermes）
   const isAdditiveMode =
@@ -292,12 +300,19 @@ export function ProviderActions({
         <Button
           size="icon"
           variant="ghost"
-          onClick={isReadOnly ? undefined : onEdit}
-          disabled={isReadOnly}
-          title={isReadOnly ? readOnlyHint : t("common.edit")}
+          onClick={editDisabled ? undefined : onEdit}
+          disabled={editDisabled}
+          title={
+            isReadOnly
+              ? readOnlyHint
+              : isOfficialLocked
+                ? officialLockedHint
+                : t("common.edit")
+          }
           className={cn(
             iconButtonClass,
-            isReadOnly && "opacity-40 cursor-not-allowed text-muted-foreground",
+            editDisabled &&
+              "opacity-40 cursor-not-allowed text-muted-foreground",
           )}
         >
           <Edit className="h-4 w-4" />

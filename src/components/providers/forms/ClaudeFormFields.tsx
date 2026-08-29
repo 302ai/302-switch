@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -80,6 +80,7 @@ interface ClaudeFormFieldsProps {
   websiteUrl: string;
   isPartner?: boolean;
   partnerPromotionKey?: string;
+  apiKeyAfterSlot?: ReactNode;
 
   // GitHub Copilot OAuth
   isCopilotPreset?: boolean;
@@ -163,6 +164,7 @@ export function ClaudeFormFields({
   websiteUrl,
   isPartner,
   partnerPromotionKey,
+  apiKeyAfterSlot,
   isCopilotPreset,
   usesOAuth,
   isCopilotAuthenticated,
@@ -629,6 +631,7 @@ export function ClaudeFormFields({
           websiteUrl={websiteUrl}
           isPartner={isPartner}
           partnerPromotionKey={partnerPromotionKey}
+          afterInputSlot={apiKeyAfterSlot}
         />
       )}
 

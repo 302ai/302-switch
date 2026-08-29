@@ -142,6 +142,7 @@
     "managedByHermes": "Hermes 托管",
     "managedByHermesHint": "该条目定义在 Hermes 的 providers: dict，请在 Hermes Web UI 中编辑或删除。",
     "ai302ProtectedHint": "302.AI 预设供应商不可删除",
+    "officialLockedHint": "官方供应商已锁定，始终连接官方且不可编辑",
     "openTerminal": "打开终端",
     "terminalOpened": "终端已打开",
     "terminalOpenFailed": "打开终端失败",
@@ -2090,7 +2091,13 @@
   "env": {
     "warning": {
       "title": "检测到系统环境变量冲突",
-      "description": "发现 {{count}} 个环境变量可能会覆盖您的配置"
+      "description": "发现 {{count}} 个环境变量可能会覆盖您的配置",
+      "impact": "这些环境变量的优先级高于本应用写入的配置，会覆盖你在这里选择的供应商，导致切换看起来不生效。"
+    },
+    "group": {
+      "fileHint": "来自配置文件，可安全删除（自动备份、可恢复）",
+      "processTitle": "来自进程 / 系统环境（无法在此删除）",
+      "processHint": "这些变量不在配置文件里，无法从这里删除。要让切换生效：在设置它们的地方取消，或从一个干净的新终端启动应用。"
     },
     "actions": {
       "expand": "查看详情",

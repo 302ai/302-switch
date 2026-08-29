@@ -661,6 +661,49 @@ impl Database {
         Ok(inserted)
     }
 
+    /// 强制把 Anthropic 官方卡（Claude Code / Claude Desktop）拉回规范空配置。
+    ///
+    /// official 卡按设计就是「空 env、走订阅登录 → 真官方 api.anthropic.com」，可历史上
+    /// 它是可编辑的，一旦被写进 302 地址 / key / 模型映射就变成「假官方」。这里每次启动
+    /// 比对：配置偏离规范就重置——既清掉已有污染，也保证官方卡永远干净。只覆盖
+    /// settings_config，名字 / 图标 / 排序 / 是否当前都由 save_provider 原样保留。
+    ///
+    /// 只管 Anthropic 两张（规范都是 {"env":{}}）。codex/gemini 官方卡的 config 里可能存着
+    /// OAuth 登录态，重置会误删，故不在此列。
+    pub fn normalize_anthropic_official_providers(&self) -> Result<usize, AppError> {
+        use crate::database::dao::providers_seed::{
+            CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID, OFFICIAL_SEEDS,
+        };
+
+        let mut fixed = 0_usize;
+        for seed in OFFICIAL_SEEDS {
+            if seed.id != "claude-official" && seed.id != CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID {
+                continue;
+            }
+            let app_type_str = seed.app_type.as_str();
+            let Some(mut provider) = self.get_provider_by_id(seed.id, app_type_str)? else {
+                continue;
+            };
+            let canonical: serde_json::Value = serde_json::from_str(seed.settings_config_json)
+                .map_err(|e| {
+                    AppError::Database(format!("Seed JSON parse failed for {}: {e}", seed.id))
+                })?;
+            if provider.settings_config == canonical {
+                continue;
+            }
+            provider.settings_config = canonical;
+            self.save_provider(app_type_str, &provider)?;
+            fixed += 1;
+            log::info!(
+                "✓ Reset official provider to clean state: {} ({})",
+                seed.name,
+                app_type_str
+            );
+        }
+
+        Ok(fixed)
+    }
+
     /// 启动时调用：补齐 302.AI 聚合供应商（无 key 占位）。
     ///
     /// 每次启动都按固定 id 扫描缺失项，而不是靠历史 flag 提前返回。这样新增支持

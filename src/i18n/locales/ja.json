@@ -142,6 +142,7 @@
     "managedByHermes": "Hermes 管理",
     "managedByHermesHint": "Hermes の providers: dict で定義されています。Hermes Web UI で編集または削除してください。",
     "ai302ProtectedHint": "組み込みの 302.AI プロバイダーは削除できません",
+    "officialLockedHint": "公式プロバイダーはロックされており、常に公式に接続され編集できません",
     "openTerminal": "ターミナルを開く",
     "terminalOpened": "ターミナルを開きました",
     "terminalOpenFailed": "ターミナルを開けませんでした",
@@ -2090,7 +2091,13 @@
   "env": {
     "warning": {
       "title": "競合する環境変数を検出しました",
-      "description": "設定を上書きする可能性のある環境変数を {{count}} 件見つけました"
+      "description": "設定を上書きする可能性のある環境変数を {{count}} 件見つけました",
+      "impact": "これらの環境変数は本アプリが書き込む設定より優先されるため、ここで選んだプロバイダーを上書きし、切り替えが効いていないように見えます。"
+    },
+    "group": {
+      "fileHint": "設定ファイル由来 — 安全に削除できます（自動バックアップ・復元可能）",
+      "processTitle": "プロセス / システム環境由来（ここでは削除できません）",
+      "processHint": "これらは設定ファイルにないため、ここでは削除できません。切り替えを反映するには、設定元で解除するか、クリーンな新しいターミナルからアプリを起動してください。"
     },
     "actions": {
       "expand": "詳細を表示",

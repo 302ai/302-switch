@@ -222,6 +222,11 @@ export function ProviderCard({
   // 真官方就该有显式 category；手动新建官方应引导标注，而不是靠空字段猜。
   const isOfficialBlockedByProxy =
     isProxyTakeover && provider.category === "official";
+  // Anthropic 官方卡锁定：必须永远是干净官方（空 env→api.anthropic.com），禁止编辑。
+  // 后端每次启动还会自愈重置，这里只是把 UI 入口也关掉，避免用户白改一场。
+  const isOfficialLocked =
+    (appId === "claude" || appId === "claude-desktop") &&
+    provider.category === "official";
   const isCopilot =
     provider.meta?.providerType === PROVIDER_TYPES.GITHUB_COPILOT ||
     provider.meta?.usage_script?.templateType === "github_copilot";
@@ -653,6 +658,7 @@ export function ProviderCard({
               isOfficialBlockedByProxy={isOfficialBlockedByProxy}
               isReadOnly={isHermesReadOnly}
               isProtected={isAi302Seed}
+              isOfficialLocked={isOfficialLocked}
               isOmo={isAnyOmo}
               onSwitch={() => onSwitch(provider)}
               onEdit={() => onEdit(provider)}
