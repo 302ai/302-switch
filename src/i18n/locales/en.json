@@ -98,7 +98,7 @@
     "noProviders": "No providers added yet",
     "noProvidersDescription": "Click \"Add Provider\" to start from scratch, or \"Import Current Config\" to safely bring in an existing setup for this tool.",
     "fillKeyCta": "Add your API key to start using it",
-    "fillKeyFirst": "Add an API key before enabling",
+    "fillKeyFirst": "Add an API key to use this",
     "noProvidersDescriptionSnippet": "When importing, settings beyond the API key and endpoint (like plugins) are kept too, so they can be shared across providers.",
     "importCurrent": "Import Current Config",
     "importFromClaude": "Import existing providers from Claude Code",

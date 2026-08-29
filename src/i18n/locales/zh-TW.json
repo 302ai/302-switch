@@ -98,7 +98,7 @@
     "noProviders": "尚未新增任何供應商",
     "noProvidersDescription": "點「新增供應商」從零開始；如果之前設定過這個工具，點「匯入目前設定」把現有設定安全存進來。",
     "fillKeyCta": "點此填入 API Key 才能使用",
-    "fillKeyFirst": "請先填入 API Key 再啟用",
+    "fillKeyFirst": "填入 API Key 後才能使用",
     "noProvidersDescriptionSnippet": "匯入時，除 API Key 和請求位址外的設定（例如外掛程式）也會一併保留，方便在不同供應商之間共用。",
     "importCurrent": "匯入目前設定",
     "importFromClaude": "將 Claude Code 中已有的供應商匯入",

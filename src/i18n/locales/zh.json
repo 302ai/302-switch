@@ -98,7 +98,7 @@
     "noProviders": "还没有添加任何供应商",
     "noProvidersDescription": "点\"添加供应商\"从零开始；如果之前配置过这个工具，点\"导入当前配置\"把现有设置安全存进来。",
     "fillKeyCta": "点此填入 API Key 才能使用",
-    "fillKeyFirst": "请先填入 API Key 再启用",
+    "fillKeyFirst": "填入 API Key 后才能使用",
     "noProvidersDescriptionSnippet": "导入时，除 Key 和请求地址外的设置（比如插件）也会一并保留，方便在不同供应商之间共用。",
     "importCurrent": "导入当前配置",
     "importFromClaude": "将 Claude Code 中已有的供应商导入",

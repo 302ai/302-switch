@@ -98,7 +98,7 @@
     "noProviders": "まだプロバイダーがありません",
     "noProvidersDescription": "「プロバイダーを追加」で最初から作成するか、このツールを以前設定したことがあれば「現在の設定をインポート」で既存の設定を安全に取り込めます。",
     "fillKeyCta": "使用するには API キーを入力してください",
-    "fillKeyFirst": "有効化する前に API キーを入力してください",
+    "fillKeyFirst": "使用するには API キーを入力してください",
     "noProvidersDescriptionSnippet": "インポート時は、API キーとリクエスト URL 以外の設定（プラグインなど）も保持され、プロバイダー間で共有できます。",
     "importCurrent": "現在の設定をインポート",
     "importFromClaude": "Claude Code の既存プロバイダーをインポート",

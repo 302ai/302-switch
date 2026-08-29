@@ -662,7 +662,7 @@ export function ProviderCard({
               switchDisabledHint={
                 ai302NeedsKey
                   ? t("provider.fillKeyFirst", {
-                      defaultValue: "请先填入 API Key 再启用",
+                      defaultValue: "填入 API Key 后才能使用",
                     })
                   : undefined
               }

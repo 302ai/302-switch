@@ -168,13 +168,16 @@ export function ProviderActions({
           text: t("provider.removeFromConfig", { defaultValue: "移除" }),
         };
       }
+      // 缺 Key 的 302 种子卡：加进配置也是条空 key 的坏条目，点了没用 → 置灰
       return {
-        disabled: false,
+        disabled: Boolean(switchDisabledHint),
         variant: "default" as const,
-        className:
-          "bg-emerald-500 hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700",
+        className: switchDisabledHint
+          ? ""
+          : "bg-emerald-500 hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700",
         icon: <Plus className="h-4 w-4" />,
         text: t("provider.addToConfig", { defaultValue: "添加" }),
+        title: switchDisabledHint,
       };
     }
 
