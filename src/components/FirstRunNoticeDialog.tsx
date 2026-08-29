@@ -49,6 +49,7 @@ import {
   claudeDesktopProviderPresets,
 } from "@/config/claudeDesktopProviderPresets";
 import { generateUUID } from "@/utils/uuid";
+import { requiresClaudeDesktopLocalRoute } from "@/utils/claudeDesktopConnection";
 import { fetchModelsForConfig, probeChatKey } from "@/lib/api/model-fetch";
 import { streamCheckProvider } from "@/lib/api/model-test";
 import {
@@ -230,10 +231,10 @@ function ai302RegionProviderLabel(region: Ai302Region): string {
 }
 
 // Claude Desktop 没有 CLI 可检测，引导也不覆盖它。企业版用户填完私有地址后，
-// 这里照 CD 表单落库那套结构（settings.env + meta 直连路由）手搓一张等价的卡，
-// 让 CD 一侧开箱就有这条私有部署，不用再手填一遍。routeMap 走 sonnet/opus/haiku
-// 透传，与 claudeDesktopProviderPresets 里 302.AI 那条的 passthroughRoutes() 一致。
-function buildClaudeDesktopEnterpriseProvider(
+// 这里照 CD 表单落库那套结构自动建卡；非本机 HTTP 地址使用本地路由，其他地址
+// 保持直连。routeMap 走 sonnet/opus/haiku 透传，与 claudeDesktopProviderPresets
+// 里 302.AI 那条的 passthroughRoutes() 一致。
+export function buildClaudeDesktopEnterpriseProvider(
   root: string,
   key: string,
 ): Provider {
@@ -257,7 +258,9 @@ function buildClaudeDesktopEnterpriseProvider(
       },
     },
     meta: {
-      claudeDesktopMode: "direct",
+      claudeDesktopMode: requiresClaudeDesktopLocalRoute(root)
+        ? "proxy"
+        : "direct",
       apiFormat: "anthropic",
       claudeDesktopModelRoutes: modelRoutes,
     },

@@ -167,6 +167,44 @@ pub fn get_claude_desktop_default_routes(
 }
 
 #[tauri::command]
+pub fn get_claude_desktop_gateway_token(state: State<'_, AppState>) -> Result<String, String> {
+    crate::claude_desktop_config::get_or_create_gateway_token(state.db.as_ref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn resync_claude_desktop_gateway_token(
+    state: State<'_, AppState>,
+    #[allow(non_snake_case)] providerId: String,
+) -> Result<(), String> {
+    let app_type = AppType::ClaudeDesktop;
+    let current_id =
+        ProviderService::current(&state, app_type.clone()).map_err(|e| e.to_string())?;
+    if current_id != providerId {
+        return Err("只能同步当前 Claude Desktop 供应商".to_string());
+    }
+
+    let provider = state
+        .db
+        .get_provider_by_id(&providerId, app_type.as_str())
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("供应商 {providerId} 不存在"))?;
+    if !matches!(
+        provider
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.claude_desktop_mode.as_ref()),
+        Some(ClaudeDesktopMode::Proxy)
+    ) {
+        return Err("当前供应商未启用 Claude Desktop 本地路由".to_string());
+    }
+
+    switch_provider_internal(&state, app_type, &providerId)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn import_claude_desktop_providers_from_claude(
     state: State<'_, AppState>,
 ) -> Result<usize, String> {

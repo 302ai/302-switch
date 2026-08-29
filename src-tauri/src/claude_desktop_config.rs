@@ -1610,6 +1610,10 @@ mod tests {
         assert_eq!(profile["inferenceGatewayAuthScheme"], json!("bearer"));
         assert_eq!(profile["coworkEgressAllowedHosts"], json!(["*"]));
         assert_ne!(profile["inferenceGatewayApiKey"], json!("test-token"));
+        assert_eq!(
+            profile["inferenceGatewayApiKey"],
+            json!(get_or_create_gateway_token(&db).expect("stored gateway token"))
+        );
         assert!(profile["inferenceGatewayApiKey"]
             .as_str()
             .expect("gateway token")

@@ -1,19 +1,34 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { ComponentProps } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ClaudeDesktopProviderForm } from "@/components/providers/forms/ClaudeDesktopProviderForm";
 import { createTestQueryClient } from "../utils/testQueryClient";
+
+const providerApiMocks = vi.hoisted(() => ({
+  getGatewayToken: vi.fn(() => Promise.resolve("ccs-test-gateway-token")),
+  getCurrent: vi.fn(() => Promise.resolve("provider-1")),
+  resyncGatewayToken: vi.fn(() => Promise.resolve()),
+}));
+const copyTextMock = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 
 vi.mock("@/lib/api/providers", () => ({
   providersApi: {
     getClaudeDesktopDefaultRoutes: () => Promise.resolve([]),
+    getClaudeDesktopGatewayToken: providerApiMocks.getGatewayToken,
+    getCurrent: providerApiMocks.getCurrent,
+    resyncClaudeDesktopGatewayToken: providerApiMocks.resyncGatewayToken,
   },
+}));
+
+vi.mock("@/lib/clipboard", () => ({
+  copyText: copyTextMock,
 }));
 
 function renderForm(
   initialData: ComponentProps<typeof ClaudeDesktopProviderForm>["initialData"],
   onSubmit = vi.fn(),
+  providerId?: string,
 ) {
   const queryClient = createTestQueryClient();
   const view = render(
@@ -23,6 +38,7 @@ function renderForm(
         onSubmit={onSubmit}
         onCancel={vi.fn()}
         initialData={initialData}
+        providerId={providerId}
       />
     </QueryClientProvider>,
   );
@@ -30,6 +46,55 @@ function renderForm(
 }
 
 describe("ClaudeDesktopProviderForm", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("本地路由可以显示、复制并重新同步内部 Gateway Token", async () => {
+    renderForm(
+      {
+        name: "Proxy Provider",
+        settingsConfig: {
+          env: {
+            ANTHROPIC_BASE_URL: "https://api.example.com",
+            ANTHROPIC_AUTH_TOKEN: "sk-test",
+          },
+        },
+        meta: {
+          claudeDesktopMode: "proxy",
+          claudeDesktopModelRoutes: {
+            "claude-sonnet-4-6": { model: "upstream-sonnet" },
+          },
+        },
+      },
+      vi.fn(),
+      "provider-1",
+    );
+
+    const tokenInput = await screen.findByLabelText("内部 Gateway Token");
+    expect(tokenInput).toHaveAttribute("type", "password");
+    await waitFor(() =>
+      expect(tokenInput).toHaveValue("ccs-test-gateway-token"),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "显示内部 Token" }));
+    expect(tokenInput).toHaveAttribute("type", "text");
+
+    fireEvent.click(screen.getByRole("button", { name: "复制内部 Token" }));
+    await waitFor(() =>
+      expect(copyTextMock).toHaveBeenCalledWith("ccs-test-gateway-token"),
+    );
+
+    const resyncButton = screen.getByRole("button", { name: "重新同步" });
+    await waitFor(() => expect(resyncButton).toBeEnabled());
+    fireEvent.click(resyncButton);
+    await waitFor(() =>
+      expect(providerApiMocks.resyncGatewayToken).toHaveBeenCalledWith(
+        "provider-1",
+      ),
+    );
+  });
+
   it("编辑模型映射的菜单显示名时保持输入框焦点", () => {
     renderForm({
       name: "Proxy Provider",
