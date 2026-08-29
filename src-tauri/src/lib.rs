@@ -625,6 +625,15 @@ pub fn run() {
                 Err(e) => log::warn!("✗ Failed to seed 302.AI providers: {e}"),
             }
 
+            // 老引导把海外种子顶成企业卡的历史数据：拆回「独立企业卡 + 干净海外卡」
+            match app_state.db.restore_cannibalized_ai302_overseas_seeds() {
+                Ok(count) if count > 0 => {
+                    log::info!("✓ Restored {count} overseas 302.AI seed(s) cannibalized by legacy enterprise onboarding");
+                }
+                Ok(_) => {}
+                Err(e) => log::warn!("✗ Failed to restore overseas 302.AI seeds: {e}"),
+            }
+
             // 旧包曾给 302.AI Codex 地址增加多余路径。数据库卡片修复后还要同步
             // 修复当前 live config，否则用户不重新切换卡片时仍会继续请求旧地址。
             match crate::codex_config::repair_ai302_codex_live_config() {

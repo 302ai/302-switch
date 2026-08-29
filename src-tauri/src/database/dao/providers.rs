@@ -704,6 +704,94 @@ impl Database {
         Ok(fixed)
     }
 
+    /// 修复历史遗留：老版引导「企业版」是直接改写 302 海外种子（ai302-{app}）的地址+名字，
+    /// 结果海外卡被顶掉，列表里只剩「国内 + 企业」。这里一次性修回：把被顶掉的海外种子
+    /// 拆成两张——新建一张独立企业卡（保留其「当前选中」态），种子本身还原成干净的
+    /// 「302.AI（海外）」。判定「被顶掉」的依据：种子配置里出现了 enterprise_profile 记录的
+    /// 私有 baseUrl。用一次性 flag 防重复；从没存过 enterprise_profile 的库直接跳过。
+    pub fn restore_cannibalized_ai302_overseas_seeds(&self) -> Result<usize, AppError> {
+        use crate::database::dao::providers_seed::AI302_SEEDS;
+
+        if self
+            .get_bool_flag("ai302_overseas_restored_v1")
+            .unwrap_or(false)
+        {
+            return Ok(0);
+        }
+
+        // 私有地址来自引导落库的企业档案；没有它就无从判断哪张是被顶掉的海外种子。
+        let ent_base_url = match self.get_setting("enterprise_profile")? {
+            Some(json) => serde_json::from_str::<serde_json::Value>(&json)
+                .ok()
+                .and_then(|v| {
+                    v.get("baseUrl")
+                        .and_then(|b| b.as_str())
+                        .map(|s| s.to_string())
+                }),
+            None => None,
+        };
+        let Some(ent_base_url) = ent_base_url.filter(|s| !s.trim().is_empty()) else {
+            self.set_setting("ai302_overseas_restored_v1", "true")?;
+            return Ok(0);
+        };
+
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        let mut restored = 0_usize;
+
+        for seed in AI302_SEEDS {
+            // 只看海外（全局）种子：id 形如 ai302-{app}，排除国内 ai302-cn-*
+            if seed.id.starts_with("ai302-cn-") {
+                continue;
+            }
+            let app = seed.app_type.as_str();
+            let Some(existing) = self.get_provider_by_id(seed.id, app)? else {
+                continue;
+            };
+            // 种子配置里出现了私有地址 = 这张海外种子被顶成了企业卡
+            let existing_str = serde_json::to_string(&existing.settings_config).unwrap_or_default();
+            if !existing_str.contains(&ent_base_url) {
+                continue;
+            }
+
+            // 1) 新建一张独立企业卡：复制现状、换新 id、归 third_party
+            let mut enterprise = existing.clone();
+            enterprise.id = uuid::Uuid::new_v4().to_string();
+            enterprise.category = Some("third_party".to_string());
+            enterprise.created_at = Some(now_ms);
+            self.save_provider(app, &enterprise)?;
+
+            // 2) 海外种子还原成规范值（save_provider 会保留库里的 is_current，先不动当前态）
+            let canonical: serde_json::Value = serde_json::from_str(seed.settings_config_json)
+                .map_err(|e| {
+                    AppError::Database(format!("Seed JSON parse failed for {}: {e}", seed.id))
+                })?;
+            let mut restored_seed = existing.clone();
+            restored_seed.settings_config = canonical;
+            restored_seed.name = seed.name.to_string();
+            restored_seed.website_url = Some(seed.website_url.to_string());
+            restored_seed.category = Some(seed.category.to_string());
+            restored_seed.icon = Some(seed.icon.to_string());
+            restored_seed.icon_color = Some(seed.icon_color.to_string());
+            self.save_provider(app, &restored_seed)?;
+
+            // 3) 如果「当前」原本就是这张（现已还原成海外的）种子，把当前态转移到新企业卡，
+            //    让用户仍停在自己的企业接口上，而不是被切到空 key 的海外卡。
+            if self.get_current_provider(app)?.as_deref() == Some(seed.id) {
+                self.set_current_provider(app, &enterprise.id)?;
+            }
+
+            restored += 1;
+            log::info!(
+                "✓ Restored overseas 302.AI seed and split off enterprise card: {} ({})",
+                seed.id,
+                app
+            );
+        }
+
+        self.set_setting("ai302_overseas_restored_v1", "true")?;
+        Ok(restored)
+    }
+
     /// 启动时调用：补齐 302.AI 聚合供应商（无 key 占位）。
     ///
     /// 每次启动都按固定 id 扫描缺失项，而不是靠历史 flag 提前返回。这样新增支持

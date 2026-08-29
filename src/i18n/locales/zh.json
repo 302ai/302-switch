@@ -1007,6 +1007,7 @@
     "codexOfficialNoApiKey": "官方无需填写 API Key，直接保存即可",
     "codexApiKeyAutoFill": "只需要填这里，下方 auth.json 会自动填充",
     "apiKeyAutoFill": "只需要填这里，下方配置会自动填充",
+    "enterpriseApiKeyPlaceholder": "点击下方按钮回填初始化 API Key 或 再次获取",
     "cnOfficialApiKeyHint": "💡 只需填写 API Key，请求地址已预设",
     "aggregatorApiKeyHint": "💡 只需填写 API Key，请求地址已预设",
     "thirdPartyApiKeyHint": "💡 只需填写 API Key，请求地址已预设",

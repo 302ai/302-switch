@@ -1007,6 +1007,7 @@
     "codexOfficialNoApiKey": "Official does not require API Key, save directly",
     "codexApiKeyAutoFill": "Just fill in here, auth.json below will be auto-filled",
     "apiKeyAutoFill": "Just fill in here, config below will be auto-filled",
+    "enterpriseApiKeyPlaceholder": "Use the buttons below to fill your saved API key or get a new one",
     "cnOfficialApiKeyHint": "💡 Only need to fill in API Key, endpoint is preset",
     "aggregatorApiKeyHint": "💡 Only need to fill in API Key, endpoint is preset",
     "thirdPartyApiKeyHint": "💡 Only need to fill in API Key, endpoint is preset",

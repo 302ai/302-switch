@@ -81,6 +81,7 @@ interface ClaudeFormFieldsProps {
   isPartner?: boolean;
   partnerPromotionKey?: string;
   apiKeyAfterSlot?: ReactNode;
+  apiKeyPlaceholder?: string;
 
   // GitHub Copilot OAuth
   isCopilotPreset?: boolean;
@@ -165,6 +166,7 @@ export function ClaudeFormFields({
   isPartner,
   partnerPromotionKey,
   apiKeyAfterSlot,
+  apiKeyPlaceholder,
   isCopilotPreset,
   usesOAuth,
   isCopilotAuthenticated,
@@ -632,6 +634,7 @@ export function ClaudeFormFields({
           isPartner={isPartner}
           partnerPromotionKey={partnerPromotionKey}
           afterInputSlot={apiKeyAfterSlot}
+          placeholderOverride={apiKeyPlaceholder}
         />
       )}
 

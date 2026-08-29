@@ -1007,6 +1007,7 @@
     "codexOfficialNoApiKey": "公式は API Key 不要です。そのまま保存してください",
     "codexApiKeyAutoFill": "ここに入力すれば auth.json も自動で埋まります",
     "apiKeyAutoFill": "ここに入力すれば下の設定も自動で埋まります",
+    "enterpriseApiKeyPlaceholder": "下のボタンで保存済みの API キーを入力するか、新しく取得してください",
     "cnOfficialApiKeyHint": "💡 API Key のみ入力すれば OK。エンドポイントはプリセット済みです",
     "aggregatorApiKeyHint": "💡 API Key のみ入力すれば OK。エンドポイントはプリセット済みです",
     "thirdPartyApiKeyHint": "💡 API Key のみ入力すれば OK。エンドポイントはプリセット済みです",

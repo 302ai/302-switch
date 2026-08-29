@@ -978,6 +978,7 @@
     "codexOfficialNoApiKey": "官方無需填寫 API Key，直接儲存即可",
     "codexApiKeyAutoFill": "只需要填這裡，下方 auth.json 會自動填寫",
     "apiKeyAutoFill": "只需要填這裡，下方設定會自動填寫",
+    "enterpriseApiKeyPlaceholder": "點擊下方按鈕回填初始化 API Key 或 再次取得",
     "cnOfficialApiKeyHint": "只需填寫 API Key，請求位址已預設",
     "aggregatorApiKeyHint": "只需填寫 API Key，請求位址已預設",
     "thirdPartyApiKeyHint": "只需填寫 API Key，請求位址已預設",

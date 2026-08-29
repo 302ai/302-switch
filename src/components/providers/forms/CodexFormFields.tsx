@@ -57,6 +57,7 @@ interface CodexFormFieldsProps {
   isPartner?: boolean;
   partnerPromotionKey?: string;
   apiKeyAfterSlot?: ReactNode;
+  apiKeyPlaceholder?: string;
 
   // Base URL
   shouldShowSpeedTest: boolean;
@@ -148,6 +149,7 @@ export function CodexFormFields({
   isPartner,
   partnerPromotionKey,
   apiKeyAfterSlot,
+  apiKeyPlaceholder,
   shouldShowSpeedTest,
   codexBaseUrl,
   onBaseUrlChange,
@@ -360,6 +362,7 @@ export function CodexFormFields({
         isPartner={isPartner}
         partnerPromotionKey={partnerPromotionKey}
         afterInputSlot={apiKeyAfterSlot}
+        placeholderOverride={apiKeyPlaceholder}
         placeholder={{
           official: t("providerForm.codexOfficialNoApiKey", {
             defaultValue: "官方供应商无需 API Key",

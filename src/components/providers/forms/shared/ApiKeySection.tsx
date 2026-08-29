@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { ExternalLink } from "lucide-react";
 import ApiKeyInput from "../ApiKeyInput";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type { ProviderCategory } from "@/types";
 
 interface ApiKeySectionProps {
@@ -20,6 +23,8 @@ interface ApiKeySectionProps {
   partnerPromotionKey?: string;
   // 紧贴 Key 输入框下方的插槽（用于企业私有化「填入上次的 Key」按钮等）
   afterInputSlot?: ReactNode;
+  // 覆盖默认占位符（企业私有化引导用户去点下方按钮）
+  placeholderOverride?: string;
 }
 
 export function ApiKeySection({
@@ -34,6 +39,7 @@ export function ApiKeySection({
   disabled,
   partnerPromotionKey,
   afterInputSlot,
+  placeholderOverride,
 }: ApiKeySectionProps) {
   const { t } = useTranslation();
 
@@ -56,22 +62,27 @@ export function ApiKeySection({
         value={value}
         onChange={onChange}
         placeholder={
-          category === "official"
+          placeholderOverride ??
+          (category === "official"
             ? finalPlaceholder.official
-            : finalPlaceholder.thirdParty
+            : finalPlaceholder.thirdParty)
         }
         disabled={disabled ?? category === "official"}
       />
       {afterInputSlot}
-      {/* API Key 获取链接 */}
+      {/* API Key 获取链接：做成小按钮，与「填入上次的 Key」按钮保持统一 */}
       {shouldShowLink && websiteUrl && (
-        <div className="space-y-2 -mt-1 pl-1">
+        <div className="space-y-2">
           <a
             href={websiteUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-blue-400 dark:text-blue-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+            className={cn(
+              buttonVariants({ variant: "outline", size: "sm" }),
+              "h-7 w-fit gap-1",
+            )}
           >
+            <ExternalLink className="h-3.5 w-3.5" />
             {t("providerForm.getApiKey", {
               defaultValue: "获取 API Key",
             })}

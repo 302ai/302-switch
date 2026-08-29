@@ -1901,6 +1901,16 @@ function ProviderFormFull({
     Boolean(enterpriseProfile?.baseUrl?.trim());
   const hasStoredEnterpriseKey = Boolean(enterpriseProfile?.apiKey?.trim());
 
+  // 企业私有化预设：Key 输入框的占位符改成"去点下方按钮"的引导（与顶部提示解耦，
+  // 无论是否存过 key 都提示）。
+  const isEnterprisePresetSelected =
+    selectedPresetEntry?.preset.nameKey === "providerPreset.enterprise";
+  const enterpriseApiKeyPlaceholder = isEnterprisePresetSelected
+    ? t("providerForm.enterpriseApiKeyPlaceholder", {
+        defaultValue: "点击下方按钮回填初始化 API Key 或 再次获取",
+      })
+    : undefined;
+
   // 「填入上次的 Key」按钮改挂在 Key 输入框正下方（通过 apiKeyAfterSlot 插槽），
   // 而不是飘在表单顶部——顶部只留「Base URL 已回填」这条与地址相关的提示。
   const enterpriseKeyPrefillSlot =
@@ -2183,13 +2193,18 @@ function ProviderFormFull({
                 shouldShowApiKey(form.getValues("settingsConfig"), isEditMode)
               }
               apiKey={apiKey}
-              onApiKeyChange={handleApiKeyChange}
+              onApiKeyChange={(value) => {
+                handleApiKeyChange(value);
+                // 用户一旦手动改动 Key，「已填入上次的 Key」就不再成立——重置回按钮态
+                setEnterpriseKeyFilled(false);
+              }}
               category={category}
               shouldShowApiKeyLink={shouldShowClaudeApiKeyLink}
               websiteUrl={claudeWebsiteUrl}
               isPartner={isClaudePartner}
               partnerPromotionKey={claudePartnerPromotionKey}
               apiKeyAfterSlot={enterpriseKeyPrefillSlot}
+              apiKeyPlaceholder={enterpriseApiKeyPlaceholder}
               isCopilotPreset={
                 templatePreset?.providerType === "github_copilot" ||
                 initialData?.meta?.providerType === "github_copilot" ||
@@ -2262,13 +2277,17 @@ function ProviderFormFull({
             <CodexFormFields
               providerId={providerId}
               codexApiKey={codexApiKey}
-              onApiKeyChange={handleCodexApiKeyChange}
+              onApiKeyChange={(value) => {
+                handleCodexApiKeyChange(value);
+                setEnterpriseKeyFilled(false);
+              }}
               category={category}
               shouldShowApiKeyLink={shouldShowCodexApiKeyLink}
               websiteUrl={codexWebsiteUrl}
               isPartner={isCodexPartner}
               partnerPromotionKey={codexPartnerPromotionKey}
               apiKeyAfterSlot={enterpriseKeyPrefillSlot}
+              apiKeyPlaceholder={enterpriseApiKeyPlaceholder}
               shouldShowSpeedTest={shouldShowSpeedTest}
               codexBaseUrl={codexBaseUrl}
               onBaseUrlChange={handleCodexBaseUrlChange}
@@ -2305,13 +2324,17 @@ function ProviderFormFull({
                 isEditMode,
               )}
               apiKey={geminiApiKey}
-              onApiKeyChange={handleGeminiApiKeyChange}
+              onApiKeyChange={(value) => {
+                handleGeminiApiKeyChange(value);
+                setEnterpriseKeyFilled(false);
+              }}
               category={category}
               shouldShowApiKeyLink={shouldShowGeminiApiKeyLink}
               websiteUrl={geminiWebsiteUrl}
               isPartner={isGeminiPartner}
               partnerPromotionKey={geminiPartnerPromotionKey}
               apiKeyAfterSlot={enterpriseKeyPrefillSlot}
+              apiKeyPlaceholder={enterpriseApiKeyPlaceholder}
               shouldShowSpeedTest={shouldShowSpeedTest}
               baseUrl={geminiBaseUrl}
               onBaseUrlChange={handleGeminiBaseUrlChange}

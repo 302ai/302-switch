@@ -29,6 +29,7 @@ interface GeminiFormFieldsProps {
   isPartner?: boolean;
   partnerPromotionKey?: string;
   apiKeyAfterSlot?: ReactNode;
+  apiKeyPlaceholder?: string;
 
   // Base URL
   shouldShowSpeedTest: boolean;
@@ -60,6 +61,7 @@ export function GeminiFormFields({
   isPartner,
   partnerPromotionKey,
   apiKeyAfterSlot,
+  apiKeyPlaceholder,
   shouldShowSpeedTest,
   baseUrl,
   onBaseUrlChange,
@@ -144,6 +146,7 @@ export function GeminiFormFields({
           isPartner={isPartner}
           partnerPromotionKey={partnerPromotionKey}
           afterInputSlot={apiKeyAfterSlot}
+          placeholderOverride={apiKeyPlaceholder}
         />
       )}
 
