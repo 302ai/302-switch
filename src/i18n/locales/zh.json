@@ -179,16 +179,22 @@
   },
   "codex": {
     "needsRouting": "需要路由",
-    "noRoutingSupport": "不支持路由"
+    "noRoutingSupport": "不支持路由",
+    "conversationAccessWarningTitle": "不同 Provider 的对话可能无法继续",
+    "conversationAccessWarning": "Codex 的登录状态可以与 Custom Settings 同时存在，但实际请求由当前 provider 配置决定。切换官方登录与第三方 provider 并重启客户端后，另一种设置下创建的对话可能无法访问或继续；请切回创建该对话时的 provider/settings 后再打开。"
   },
   "claudeDesktop": {
     "officialNotice": "Claude Desktop 官方供应商使用应用内置的 1P 登录，无需配置 API Key 和接口地址。",
-    "mode": "模型处理方式",
+    "mode": "连接方式",
     "modeDirect": "直连",
-    "modeProxy": "需要路由",
-    "modelMappingToggle": "需要模型映射",
-    "modelMappingOffHint": "仅当供应商直接接受 Claude Desktop 可识别的三档角色 ID（claude-sonnet-* / claude-opus-* / claude-haiku-*）时才适用直连；其他模型名（含 claude-3-5-sonnet-… 等旧式 ID）请打开此开关走映射。",
-    "modelMappingOnHint": "Claude Desktop 只接受 claude-sonnet-* / claude-opus-* / claude-haiku-* 三档角色 ID。开启后 302 Switch 会把这三档映射到供应商的实际模型，并在使用期间保持本地路由开启。",
+    "modeProxy": "本地路由",
+    "localRouteToggle": "通过 302 Switch 本地路由",
+    "localRouteOffHint": "Claude Desktop 将直接连接上游。仅适用于可公开访问的 HTTPS Anthropic 接口和 Claude Desktop 可识别的模型名。",
+    "localRouteOnHint": "Claude Desktop 会先连接 302 Switch，再由当前 Claude Desktop 供应商访问上游；模型映射和格式转换也在这里完成。",
+    "publicHttpAutoRouteHint": "检测到非本机 HTTP 地址。Claude Desktop 不允许直接访问，已自动使用本地路由。供应商地址仍保持不变。",
+    "connectionPreviewTitle": "连接预览",
+    "localRouteNode": "302 Switch 本地路由",
+    "upstreamEndpointPending": "等待填写上游地址",
     "routeMapTitle": "模型映射",
     "routeMapHint": "为 Sonnet、Opus、Haiku 三档分别填写实际请求模型；菜单显示名可写 DeepSeek、Kimi 等品牌名。留空的档会自动沿用 Sonnet（或第一个已填档）的模型，确保子 agent 调用的 Haiku 始终可用。",
     "routeModelLabel": "模型角色",
@@ -217,7 +223,7 @@
     "route": {
       "tooltip": {
         "active": "Claude Desktop 本地路由已开启 - {{address}}:{{port}}",
-        "inactive": "开启 Claude Desktop 本地路由，用于需要模型映射或格式转换的供应商。当前配置地址：{{address}}:{{port}}"
+        "inactive": "开启 Claude Desktop 本地路由，用于公网 HTTP、模型映射或格式转换。当前配置地址：{{address}}:{{port}}"
       }
     }
   },
@@ -253,6 +259,7 @@
     "proxyReasonCopilot": "使用 GitHub Copilot 作为 Claude 供应商",
     "proxyReasonOpenAIChat": "使用 OpenAI Chat 接口格式",
     "proxyReasonOpenAIResponses": "使用 OpenAI Responses 接口格式",
+    "proxyReasonClaudeDesktop": "使用 Claude Desktop 本地路由模式",
     "proxyReasonFullUrl": "开启了完整 URL 连接模式",
     "openAIFormatHint": "此供应商使用 OpenAI 兼容格式，需要开启路由服务才能正常使用",
     "copilotProxyHint": "GitHub Copilot 作为 Claude 供应商时始终需要本地路由；路由会根据当前模型自动选择 Chat Completions 或 Responses。",

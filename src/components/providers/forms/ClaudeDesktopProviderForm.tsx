@@ -4,10 +4,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
+  ArrowRight,
   ChevronDown,
   ChevronRight,
   Download,
   Loader2,
+  Network,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -69,6 +71,7 @@ import {
 } from "@/lib/api/providers";
 import { settingsApi, type EnterpriseProfile } from "@/lib/api";
 import { resolveManagedAccountId } from "@/lib/authBinding";
+import { requiresClaudeDesktopLocalRoute } from "@/utils/claudeDesktopConnection";
 
 export type ClaudeDesktopProviderFormValues = ProviderFormData & {
   presetId?: string;
@@ -259,12 +262,16 @@ export function ClaudeDesktopProviderForm({
   const { t } = useTranslation();
   const initialMode = initialData?.meta?.claudeDesktopMode ?? "direct";
   const [mode, setMode] = useState<"direct" | "proxy">(initialMode);
-  const needsModelMapping = mode === "proxy";
+  const usesLocalRoute = mode === "proxy";
   const [apiFormat, setApiFormat] = useState<ClaudeApiFormat>(
     initialData?.meta?.apiFormat ?? "anthropic",
   );
   const [baseUrl, setBaseUrl] = useState(
     envString(initialData?.settingsConfig, "ANTHROPIC_BASE_URL"),
+  );
+  const publicHttpRequiresLocalRoute = useMemo(
+    () => requiresClaudeDesktopLocalRoute(baseUrl),
+    [baseUrl],
   );
   const [apiKey, setApiKey] = useState(
     envString(initialData?.settingsConfig, "ANTHROPIC_AUTH_TOKEN") ||
@@ -344,6 +351,21 @@ export function ClaudeDesktopProviderForm({
       ),
     [defaultRoutes, initialData?.settingsConfig],
   );
+
+  useEffect(() => {
+    if (publicHttpRequiresLocalRoute && mode !== "proxy") {
+      setMode("proxy");
+      setRoutes((current) => {
+        const source = current.length > 0 ? current : defaultProxyRouteRows;
+        if (source.length === 0) {
+          didSeedDefaultRoutes.current = false;
+          return current;
+        }
+        didSeedDefaultRoutes.current = true;
+        return normalizeProxyRows(source);
+      });
+    }
+  }, [defaultProxyRouteRows, mode, publicHttpRequiresLocalRoute]);
 
   const defaultValues: ProviderFormData = useMemo(
     () => ({
@@ -449,7 +471,12 @@ export function ClaudeDesktopProviderForm({
     form.setValue("icon", preset.icon ?? "");
     form.setValue("iconColor", preset.iconColor ?? "");
 
-    setBaseUrl(enterpriseBaseUrl || preset.baseUrl);
+    const nextBaseUrl = enterpriseBaseUrl || preset.baseUrl;
+    const nextMode =
+      preset.mode === "proxy" || requiresClaudeDesktopLocalRoute(nextBaseUrl)
+        ? "proxy"
+        : "direct";
+    setBaseUrl(nextBaseUrl);
     setApiKey(
       fillKey && enterpriseProfile?.apiKey?.trim()
         ? enterpriseProfile.apiKey.trim()
@@ -458,9 +485,9 @@ export function ClaudeDesktopProviderForm({
     setApiKeyField(preset.apiKeyField ?? "ANTHROPIC_AUTH_TOKEN");
     setApiFormat(preset.apiFormat ?? "anthropic");
 
-    didSeedDefaultRoutes.current = true;
-    setMode(preset.mode);
-    if (preset.mode === "proxy" && preset.modelRoutes) {
+    setMode(nextMode);
+    if (nextMode === "proxy" && preset.modelRoutes?.length) {
+      didSeedDefaultRoutes.current = true;
       setRoutes(
         normalizeProxyRows(
           preset.modelRoutes.map((r) =>
@@ -474,6 +501,7 @@ export function ClaudeDesktopProviderForm({
         ),
       );
     } else {
+      didSeedDefaultRoutes.current = nextMode !== "proxy";
       setRoutes([]);
     }
   };
@@ -534,7 +562,8 @@ export function ClaudeDesktopProviderForm({
     );
   };
 
-  const handleModelMappingChange = (checked: boolean) => {
+  const handleLocalRouteChange = (checked: boolean) => {
+    if (!checked && publicHttpRequiresLocalRoute) return;
     setMode(checked ? "proxy" : "direct");
     if (checked) {
       // 切到 proxy：归一化成固定 Sonnet / Opus / Haiku 三档；
@@ -660,7 +689,7 @@ export function ClaudeDesktopProviderForm({
       }))
       .filter((route) => route.route || route.model);
 
-    if (mode === "proxy") {
+    if (usesLocalRoute) {
       // 固定四档（Sonnet / Opus / Fable / Haiku），route_id 由 UI 生成、恒合法，
       // 因此只要求至少填一个实际请求模型；留空档继承第一个已填档（Sonnet 优先），
       // 对齐 Claude Code 的兜底，保证落库四档齐全、子 agent 不会找不到模型。
@@ -720,9 +749,9 @@ export function ClaudeDesktopProviderForm({
       Record<string, ClaudeDesktopModelRoute>
     >((acc, route) => {
       acc[route.route] = {
-        model: mode === "direct" ? route.route : route.model || route.route,
+        model: usesLocalRoute ? route.model || route.route : route.route,
         labelOverride:
-          route.labelOverride || (mode === "proxy" ? route.model : undefined),
+          route.labelOverride || (usesLocalRoute ? route.model : undefined),
         supports1m: route.supports1m || undefined,
       };
       return acc;
@@ -731,7 +760,7 @@ export function ClaudeDesktopProviderForm({
     const meta: ProviderMeta = {
       ...(initialData?.meta ?? {}),
       claudeDesktopMode: mode,
-      apiFormat: mode === "proxy" ? apiFormat : "anthropic",
+      apiFormat: usesLocalRoute ? apiFormat : "anthropic",
     };
 
     meta.claudeDesktopModelRoutes = routeMap;
@@ -903,48 +932,85 @@ export function ClaudeDesktopProviderForm({
               onChange={(v) => setBaseUrl(v)}
               placeholder={t("providerForm.apiEndpointPlaceholder")}
               hint={
-                needsModelMapping && apiFormat === "openai_responses"
+                usesLocalRoute && apiFormat === "openai_responses"
                   ? t("providerForm.apiHintResponses")
-                  : needsModelMapping && apiFormat === "openai_chat"
+                  : usesLocalRoute && apiFormat === "openai_chat"
                     ? t("providerForm.apiHintOAI")
-                    : needsModelMapping && apiFormat === "gemini_native"
+                    : usesLocalRoute && apiFormat === "gemini_native"
                       ? t("providerForm.apiHintGeminiNative")
                       : t("providerForm.apiHint")
               }
               showManageButton={false}
             />
 
+            <div className="space-y-2 rounded-lg border border-border-default bg-muted/20 p-4">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Network className="h-4 w-4 text-muted-foreground" />
+                {t("claudeDesktop.connectionPreviewTitle", {
+                  defaultValue: "连接预览",
+                })}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span className="rounded-md border bg-background px-2 py-1 text-foreground">
+                  Claude Desktop
+                </span>
+                <ArrowRight className="h-3.5 w-3.5" />
+                {usesLocalRoute && (
+                  <>
+                    <span className="rounded-md border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-sky-800 dark:text-sky-200">
+                      {t("claudeDesktop.localRouteNode", {
+                        defaultValue: "302 Switch 本地路由",
+                      })}
+                    </span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </>
+                )}
+                <span className="max-w-full truncate rounded-md border bg-background px-2 py-1 font-mono text-foreground">
+                  {baseUrl.trim() ||
+                    t("claudeDesktop.upstreamEndpointPending", {
+                      defaultValue: "等待填写上游地址",
+                    })}
+                </span>
+              </div>
+            </div>
+
             <div className="space-y-3 rounded-lg border border-border-default bg-muted/20 p-4">
               <div className="flex items-center justify-between gap-4">
                 <div className="space-y-1">
                   <Label>
-                    {t("claudeDesktop.modelMappingToggle", {
-                      defaultValue: "需要模型映射",
+                    {t("claudeDesktop.localRouteToggle", {
+                      defaultValue: "通过 302 Switch 本地路由",
                     })}
                   </Label>
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    {needsModelMapping
-                      ? t("claudeDesktop.modelMappingOnHint", {
+                    {publicHttpRequiresLocalRoute
+                      ? t("claudeDesktop.publicHttpAutoRouteHint", {
                           defaultValue:
-                            "Claude Desktop 只接受 claude-sonnet-* / claude-opus-* / claude-haiku-* 三档角色 ID。开启后 302 Switch 会把这三档映射到供应商的实际模型，并在使用期间保持本地路由开启。",
+                            "检测到非本机 HTTP 地址。Claude Desktop 不允许直接访问，已自动使用本地路由。供应商地址仍保持不变。",
                         })
-                      : t("claudeDesktop.modelMappingOffHint", {
-                          defaultValue:
-                            "仅当供应商直接接受 Claude Desktop 可识别的三档角色 ID（claude-sonnet-* / claude-opus-* / claude-haiku-*）时才适用直连；其他模型名（含 claude-3-5-sonnet-… 等旧式 ID）请打开此开关走映射。",
-                        })}
+                      : usesLocalRoute
+                        ? t("claudeDesktop.localRouteOnHint", {
+                            defaultValue:
+                              "Claude Desktop 会先连接 302 Switch，再由当前 Claude Desktop 供应商访问上游；模型映射和格式转换也在这里完成。",
+                          })
+                        : t("claudeDesktop.localRouteOffHint", {
+                            defaultValue:
+                              "Claude Desktop 将直接连接上游。仅适用于可公开访问的 HTTPS Anthropic 接口和 Claude Desktop 可识别的模型名。",
+                          })}
                   </p>
                 </div>
                 <Switch
-                  checked={needsModelMapping}
-                  onCheckedChange={handleModelMappingChange}
-                  aria-label={t("claudeDesktop.modelMappingToggle", {
-                    defaultValue: "需要模型映射",
+                  checked={usesLocalRoute}
+                  onCheckedChange={handleLocalRouteChange}
+                  disabled={publicHttpRequiresLocalRoute}
+                  aria-label={t("claudeDesktop.localRouteToggle", {
+                    defaultValue: "通过 302 Switch 本地路由",
                   })}
                 />
               </div>
             </div>
 
-            {needsModelMapping && (
+            {usesLocalRoute && (
               <div className="space-y-4 rounded-lg border border-border-default p-4">
                 <div className="space-y-2">
                   <Label>
@@ -1128,7 +1194,7 @@ export function ClaudeDesktopProviderForm({
               </div>
             )}
 
-            {!needsModelMapping && (
+            {!usesLocalRoute && (
               <Collapsible
                 open={directModelsExpanded}
                 onOpenChange={setDirectModelsExpanded}

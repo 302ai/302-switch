@@ -235,12 +235,12 @@ describe("ProviderList Component", () => {
     // Drag attributes from useSortable
     expect(
       providerCardRenderSpy.mock.calls[0][0].dragHandleProps?.attributes[
-      "data-dnd-id"
+        "data-dnd-id"
       ],
     ).toBe("b");
     expect(
       providerCardRenderSpy.mock.calls[1][0].dragHandleProps?.attributes[
-      "data-dnd-id"
+        "data-dnd-id"
       ],
     ).toBe("a");
 
@@ -304,6 +304,45 @@ describe("ProviderList Component", () => {
     expect(screen.queryByTestId("provider-card-beta")).not.toBeInTheDocument();
     expect(
       screen.getByText("No providers match your search."),
+    ).toBeInTheDocument();
+  });
+
+  it("warns Codex users when official and custom providers coexist", () => {
+    const official = createProvider({
+      id: "codex-official",
+      name: "OpenAI Official",
+      category: "official",
+    });
+    const custom = createProvider({
+      id: "custom",
+      name: "Custom Gateway",
+      category: "third_party",
+    });
+
+    useDragSortMock.mockReturnValue({
+      sortedProviders: [official, custom],
+      sensors: [],
+      handleDragEnd: vi.fn(),
+    });
+
+    renderWithQueryClient(
+      <ProviderList
+        providers={{ "codex-official": official, custom }}
+        currentProviderId="custom"
+        appId="codex"
+        onSwitch={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onDuplicate={vi.fn()}
+        onOpenWebsite={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText("不同 Provider 的对话可能无法继续"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Codex 的登录状态可以与 Custom Settings 同时存在/),
     ).toBeInTheDocument();
   });
 });

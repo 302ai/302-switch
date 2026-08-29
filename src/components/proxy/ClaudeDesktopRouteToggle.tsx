@@ -64,7 +64,7 @@ export function ClaudeDesktopRouteToggle({
     : t("claudeDesktop.route.tooltip.inactive", {
         address: routeAddress,
         port: routePort,
-        defaultValue: `开启 Claude Desktop 本地路由，用于需要模型映射或格式转换的供应商。当前配置地址：${routeAddress}:${routePort}`,
+        defaultValue: `开启 Claude Desktop 本地路由，用于公网 HTTP、模型映射或格式转换。当前配置地址：${routeAddress}:${routePort}`,
       });
 
   return (

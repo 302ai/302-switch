@@ -179,16 +179,22 @@
   },
   "codex": {
     "needsRouting": "Needs Routing",
-    "noRoutingSupport": "No Routing Support"
+    "noRoutingSupport": "No Routing Support",
+    "conversationAccessWarningTitle": "Conversations may not continue across providers",
+    "conversationAccessWarning": "Codex sign-in and Custom Settings can coexist, but requests follow the active provider configuration. After switching between official sign-in and a third-party provider and restarting the client, conversations created under the other setting may not open or continue. Switch back to the provider/settings that created the conversation before reopening it."
   },
   "claudeDesktop": {
     "officialNotice": "Claude Desktop official providers use the built-in 1P sign-in. No API key or endpoint URL is required.",
-    "mode": "Model handling",
+    "mode": "Connection method",
     "modeDirect": "Direct",
-    "modeProxy": "Requires routing",
-    "modelMappingToggle": "Needs model mapping",
-    "modelMappingOffHint": "Direct mode works only when the provider accepts Claude Desktop's three role IDs (claude-sonnet-* / claude-opus-* / claude-haiku-*); for any other model name (including legacy IDs like claude-3-5-sonnet-…), enable this switch to use mapping.",
-    "modelMappingOnHint": "Claude Desktop only accepts the three role IDs claude-sonnet-* / claude-opus-* / claude-haiku-*. When enabled, 302 Switch maps these three roles to your provider's actual models and keeps local routing running while in use.",
+    "modeProxy": "Local routing",
+    "localRouteToggle": "Route through 302 Switch",
+    "localRouteOffHint": "Claude Desktop connects directly to the upstream. This requires a publicly reachable HTTPS Anthropic endpoint and model IDs that Claude Desktop recognizes.",
+    "localRouteOnHint": "Claude Desktop connects to 302 Switch first, which then uses the current Claude Desktop provider to reach the upstream. Model mapping and format conversion also happen here.",
+    "publicHttpAutoRouteHint": "A non-loopback HTTP endpoint was detected. Claude Desktop cannot connect to it directly, so local routing was enabled automatically. The provider endpoint remains unchanged.",
+    "connectionPreviewTitle": "Connection preview",
+    "localRouteNode": "302 Switch local route",
+    "upstreamEndpointPending": "Upstream endpoint not set",
     "routeMapTitle": "Model mapping",
     "routeMapHint": "Fill in the actual request model for each of the Sonnet, Opus, and Haiku tiers. Use the menu display name for branded models such as DeepSeek or Kimi. Any tier left blank inherits the Sonnet tier's model (or the first tier you filled in), so the Haiku that sub-agents call is always available.",
     "routeModelLabel": "Model role",
@@ -217,7 +223,7 @@
     "route": {
       "tooltip": {
         "active": "Claude Desktop local routing is running - {{address}}:{{port}}",
-        "inactive": "Turn on Claude Desktop local routing for providers that need model mapping or format conversion. Configured address: {{address}}:{{port}}"
+        "inactive": "Turn on Claude Desktop local routing for public HTTP endpoints, model mapping, or format conversion. Configured address: {{address}}:{{port}}"
       }
     }
   },
@@ -253,6 +259,7 @@
     "proxyReasonCopilot": "uses GitHub Copilot as a Claude provider",
     "proxyReasonOpenAIChat": "uses OpenAI Chat API format",
     "proxyReasonOpenAIResponses": "uses OpenAI Responses API format",
+    "proxyReasonClaudeDesktop": "uses Claude Desktop local routing",
     "proxyReasonFullUrl": "has full URL connection mode enabled",
     "openAIFormatHint": "This provider uses OpenAI-compatible format and requires the routing service to be enabled",
     "copilotProxyHint": "GitHub Copilot as a Claude provider always requires local routing; routing automatically selects Chat Completions or Responses based on the current model.",

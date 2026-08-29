@@ -179,16 +179,22 @@
   },
   "codex": {
     "needsRouting": "ルーティングが必要",
-    "noRoutingSupport": "ルーティング非対応"
+    "noRoutingSupport": "ルーティング非対応",
+    "conversationAccessWarningTitle": "プロバイダーをまたぐと会話を継続できない場合があります",
+    "conversationAccessWarning": "Codex のサインイン状態と Custom Settings は共存できますが、実際のリクエストは現在のプロバイダー設定に従います。公式サインインとサードパーティプロバイダーを切り替えてクライアントを再起動すると、別の設定で作成した会話を開いたり継続したりできない場合があります。その会話を作成した provider/settings に戻してから開いてください。"
   },
   "claudeDesktop": {
     "officialNotice": "Claude Desktop の公式プロバイダーは内蔵の 1P サインインを使用します。API キーやエンドポイントの設定は不要です。",
-    "mode": "モデル処理方式",
+    "mode": "接続方法",
     "modeDirect": "直結",
-    "modeProxy": "ルーティング必要",
-    "modelMappingToggle": "モデルマッピングが必要",
-    "modelMappingOffHint": "プロバイダーが Claude Desktop の三つの役割 ID（claude-sonnet-* / claude-opus-* / claude-haiku-*）を受け付ける場合のみ直結できます。それ以外のモデル名（claude-3-5-sonnet-… などの旧式 ID を含む）はこのスイッチを有効にしてマッピングを使ってください。",
-    "modelMappingOnHint": "Claude Desktop は claude-sonnet-* / claude-opus-* / claude-haiku-* の三つの役割 ID のみ受け付けます。有効にすると 302 Switch がこの三役割をプロバイダーの実モデルにマッピングし、使用中はローカルルーティングを起動したままにします。",
+    "modeProxy": "ローカルルーティング",
+    "localRouteToggle": "302 Switch 経由でローカルルーティング",
+    "localRouteOffHint": "Claude Desktop が上流へ直接接続します。公開 HTTPS Anthropic エンドポイントと、Claude Desktop が認識できるモデル ID が必要です。",
+    "localRouteOnHint": "Claude Desktop は最初に 302 Switch へ接続し、現在の Claude Desktop プロバイダーを使って上流へ接続します。モデルマッピングや形式変換もここで行われます。",
+    "publicHttpAutoRouteHint": "ループバック以外の HTTP エンドポイントを検出しました。Claude Desktop は直接接続できないため、ローカルルーティングを自動的に有効にしました。プロバイダーのエンドポイントは変更されません。",
+    "connectionPreviewTitle": "接続プレビュー",
+    "localRouteNode": "302 Switch ローカルルート",
+    "upstreamEndpointPending": "上流エンドポイント未設定",
     "routeMapTitle": "モデルマッピング",
     "routeMapHint": "Sonnet・Opus・Haiku の各区分に実際のリクエストモデルを入力してください。DeepSeek や Kimi などのブランド名はメニュー表示名に入れられます。空欄の区分は Sonnet（または最初に入力した区分）のモデルを引き継ぐため、サブ agent が呼び出す Haiku が常に利用可能になります。",
     "routeModelLabel": "モデル役割",
@@ -217,7 +223,7 @@
     "route": {
       "tooltip": {
         "active": "Claude Desktop ローカルルーティングは起動中です - {{address}}:{{port}}",
-        "inactive": "モデルマッピングや形式変換が必要なプロバイダー向けに Claude Desktop ローカルルーティングを起動します。設定アドレス: {{address}}:{{port}}"
+        "inactive": "公開 HTTP エンドポイント、モデルマッピング、形式変換向けに Claude Desktop ローカルルーティングを起動します。設定アドレス: {{address}}:{{port}}"
       }
     }
   },
@@ -253,6 +259,7 @@
     "proxyReasonCopilot": "GitHub Copilot を Claude プロバイダーとして使用しており",
     "proxyReasonOpenAIChat": "OpenAI Chat API フォーマットを使用しており",
     "proxyReasonOpenAIResponses": "OpenAI Responses API フォーマットを使用しており",
+    "proxyReasonClaudeDesktop": "Claude Desktop ローカルルーティングを使用しており",
     "proxyReasonFullUrl": "完全 URL 接続モードが有効になっており",
     "openAIFormatHint": "このプロバイダーは OpenAI 互換フォーマットを使用しており、ルーティングサービスの有効化が必要です",
     "copilotProxyHint": "GitHub Copilot を Claude プロバイダーとして使用する場合、ローカルルーティングが常に必要です。ルーティングは現在のモデルに応じて Chat Completions または Responses を自動的に選択します。",

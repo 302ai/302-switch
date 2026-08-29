@@ -288,6 +288,11 @@ export function ProviderList({
     });
   }, [searchTerm, sortedProviders]);
 
+  const showCodexConversationAccessWarning =
+    appId === "codex" &&
+    sortedProviders.some((provider) => provider.category === "official") &&
+    sortedProviders.some((provider) => provider.category !== "official");
+
   const claudeDesktopStatusMessages = useMemo(() => {
     if (appId !== "claude-desktop" || !claudeDesktopStatus) return [];
 
@@ -444,6 +449,22 @@ export function ProviderList({
 
   return (
     <div className="mt-4 space-y-4">
+      {showCodexConversationAccessWarning && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+          <div className="flex items-center gap-2 font-medium">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            {t("codex.conversationAccessWarningTitle", {
+              defaultValue: "不同 Provider 的对话可能无法继续",
+            })}
+          </div>
+          <p className="mt-2 text-xs leading-relaxed">
+            {t("codex.conversationAccessWarning", {
+              defaultValue:
+                "Codex 的登录状态可以与 Custom Settings 同时存在，但实际请求由当前 provider 配置决定。切换官方登录与第三方 provider 并重启客户端后，另一种设置下创建的对话可能无法访问或继续；请切回创建该对话时的 provider/settings 后再打开。",
+            })}
+          </p>
+        </div>
+      )}
       {claudeDesktopStatusMessages.length > 0 && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
           <div className="flex items-center gap-2 font-medium">
