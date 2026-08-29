@@ -824,11 +824,15 @@ export function ClaudeFormFields({
               <div className="flex items-center justify-between">
                 <FormLabel>{t("providerForm.modelMappingLabel")}</FormLabel>
                 <div className="flex gap-2">
-                  {/* 一键设置按钮 */}
+                  {/* 全部套用同一模型：批量把一个模型名填到所有角色 */}
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
+                    title={t("providerForm.quickSetModelsHint", {
+                      defaultValue:
+                        "把已填的第一个模型名，一次性套用到所有角色（显示名与实际请求名）",
+                    })}
                     onClick={() => {
                       const value =
                         claudeModel ||

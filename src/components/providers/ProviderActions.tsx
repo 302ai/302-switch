@@ -43,6 +43,8 @@ interface ProviderActionsProps {
   isProtected?: boolean;
   // Anthropic 官方卡：必须永远是干净官方，禁止编辑（避免被写进第三方地址/key）
   isOfficialLocked?: boolean;
+  // 有值时禁用「启用/切换」按钮并把该文案作为 hover 提示（如 302 种子卡还没填 Key）
+  switchDisabledHint?: string;
   // OpenClaw: default model
   isDefaultModel?: boolean;
   onSetAsDefault?: () => void;
@@ -83,6 +85,7 @@ export function ProviderActions({
   isReadOnly = false,
   isProtected = false,
   isOfficialLocked = false,
+  switchDisabledHint,
   // OpenClaw: default model
   isDefaultModel = false,
   onSetAsDefault,
@@ -215,6 +218,18 @@ export function ProviderActions({
         icon: <Play className="h-4 w-4" />,
         text: t("provider.enable"),
         title: t("provider.blockedByProxyHint"),
+      };
+    }
+
+    // 缺 Key 的 302 种子卡：不能启用，按钮置灰并解释原因（配合卡片上的「填入 Key」CTA）
+    if (switchDisabledHint) {
+      return {
+        disabled: true,
+        variant: "default" as const,
+        className: "",
+        icon: <Play className="h-4 w-4" />,
+        text: t("provider.enable"),
+        title: switchDisabledHint,
       };
     }
 

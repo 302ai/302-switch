@@ -47,6 +47,9 @@ export function useCommonConfigSnippet({
 
   // 用于跟踪是否正在通过通用配置更新
   const isUpdatingFromCommonConfig = useRef(false);
+  // 记录「本 hook 最近一次写进 settingsConfig 的字符串」。同步 effect 遇到这个值就跳过，
+  // 不去回读+翻转开关——避免「套用配置→开关翻转→再套用」的渲染循环（setTimeout 守卫太脆）。
+  const lastAppliedConfig = useRef<string | null>(null);
   // 用于跟踪新建模式是否已初始化默认勾选
   const hasInitializedNewMode = useRef(false);
   // 用于跟踪编辑模式是否已初始化显式开关/预览
@@ -142,6 +145,7 @@ export function useCommonConfigSnippet({
         );
         if (!error) {
           isUpdatingFromCommonConfig.current = true;
+          lastAppliedConfig.current = updatedConfig;
           onConfigChange(updatedConfig);
           setTimeout(() => {
             isUpdatingFromCommonConfig.current = false;
@@ -180,6 +184,7 @@ export function useCommonConfigSnippet({
           );
           if (!error) {
             isUpdatingFromCommonConfig.current = true;
+            lastAppliedConfig.current = updatedConfig;
             onConfigChange(updatedConfig);
             setTimeout(() => {
               isUpdatingFromCommonConfig.current = false;
@@ -218,6 +223,7 @@ export function useCommonConfigSnippet({
       setUseCommonConfig(checked);
       // 标记正在通过通用配置更新
       isUpdatingFromCommonConfig.current = true;
+      lastAppliedConfig.current = updatedConfig;
       onConfigChange(updatedConfig);
       // 在下一个事件循环中重置标记
       setTimeout(() => {
@@ -251,6 +257,7 @@ export function useCommonConfigSnippet({
             previousSnippet,
             false,
           );
+          lastAppliedConfig.current = updatedConfig;
           onConfigChange(updatedConfig);
           setUseCommonConfig(false);
         }
@@ -298,6 +305,7 @@ export function useCommonConfigSnippet({
 
         // 标记正在通过通用配置更新，避免触发状态检查
         isUpdatingFromCommonConfig.current = true;
+        lastAppliedConfig.current = addResult.updatedConfig;
         onConfigChange(addResult.updatedConfig);
         // 在下一个事件循环中重置标记
         setTimeout(() => {
@@ -314,11 +322,15 @@ export function useCommonConfigSnippet({
     if (isUpdatingFromCommonConfig.current || isLoading) {
       return;
     }
+    // 这次变化就是本 hook 自己写进去的 → 跳过，别回读再翻转开关（否则会来回抖）
+    if (settingsConfig === lastAppliedConfig.current) {
+      return;
+    }
     const hasCommon = hasCommonConfigSnippet(
       settingsConfig,
       commonConfigSnippet,
     );
-    setUseCommonConfig(hasCommon);
+    setUseCommonConfig((prev) => (prev === hasCommon ? prev : hasCommon));
   }, [enabled, settingsConfig, commonConfigSnippet, isLoading]);
 
   // 从编辑器当前内容提取通用配置片段

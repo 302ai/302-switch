@@ -69,36 +69,37 @@ export function ApiKeySection({
         }
         disabled={disabled ?? category === "official"}
       />
-      {afterInputSlot}
-      {/* API Key 获取链接：做成小按钮，与「填入上次的 Key」按钮保持统一 */}
-      {shouldShowLink && websiteUrl && (
-        <div className="space-y-2">
-          <a
-            href={websiteUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(
-              buttonVariants({ variant: "outline", size: "sm" }),
-              "h-7 w-fit gap-1",
-            )}
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            {t("providerForm.getApiKey", {
-              defaultValue: "获取 API Key",
-            })}
-          </a>
-
-          {/* 促销信息（与 isPartner 解耦：仅凭 partnerPromotionKey 即可展示，星标仍由 isPartner 控制） */}
-          {partnerPromotionKey && (
-            <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 p-2.5 border border-blue-200 dark:border-blue-800">
-              <p className="text-xs leading-relaxed text-blue-700 dark:text-blue-300">
-                💡{" "}
-                {t(`providerForm.partnerPromotion.${partnerPromotionKey}`, {
-                  defaultValue: "",
-                })}
-              </p>
-            </div>
+      {/* 插槽（如「填入上次的 Key」按钮）与「获取 API Key」按钮并排一行，样式统一 */}
+      {(afterInputSlot || (shouldShowLink && websiteUrl)) && (
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          {afterInputSlot}
+          {shouldShowLink && websiteUrl && (
+            <a
+              href={websiteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "h-7 w-fit gap-1",
+              )}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              {t("providerForm.getApiKey", {
+                defaultValue: "获取 API Key",
+              })}
+            </a>
           )}
+        </div>
+      )}
+      {/* 促销信息（与 isPartner 解耦：仅凭 partnerPromotionKey 即可展示，星标仍由 isPartner 控制） */}
+      {shouldShowLink && websiteUrl && partnerPromotionKey && (
+        <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 p-2.5 border border-blue-200 dark:border-blue-800">
+          <p className="text-xs leading-relaxed text-blue-700 dark:text-blue-300">
+            💡{" "}
+            {t(`providerForm.partnerPromotion.${partnerPromotionKey}`, {
+              defaultValue: "",
+            })}
+          </p>
         </div>
       )}
     </div>

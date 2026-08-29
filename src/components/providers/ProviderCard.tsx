@@ -659,6 +659,13 @@ export function ProviderCard({
               isReadOnly={isHermesReadOnly}
               isProtected={isAi302Seed}
               isOfficialLocked={isOfficialLocked}
+              switchDisabledHint={
+                ai302NeedsKey
+                  ? t("provider.fillKeyFirst", {
+                      defaultValue: "请先填入 API Key 再启用",
+                    })
+                  : undefined
+              }
               isOmo={isAnyOmo}
               onSwitch={() => onSwitch(provider)}
               onEdit={() => onEdit(provider)}
