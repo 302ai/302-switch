@@ -1054,7 +1054,7 @@
     "haikuModelPlaceholder": "",
     "modelHelper": "選填：指定預設使用的 Claude 模型，留空則使用系統預設。",
     "modelMappingLabel": "模型對應",
-    "modelMappingHint": "顯示名稱只影響 /model 選單；1M 只是提供給 Claude Code 的上下文能力聲明。",
+    "modelMappingHint": "留空則跟隨原產品預設模型請求；若產品無預設模型、或填寫的模型名有誤，會導致請求失敗。顯示名稱只影響 /model 選單；1M 是提供給 Claude Code 的上下文能力聲明。",
     "modelRoleLabel": "模型角色",
     "modelRoleSonnet": "Sonnet",
     "modelRoleOpus": "Opus",
@@ -1090,7 +1090,7 @@
     "fetchModelsEndpointNotFound": "未找到可用的模型清單端點，請檢查 Base URL 或確認供應商是否開放該 API",
     "fetchModelsTimeout": "請求逾時，請檢查網路連線",
     "enterprisePrefill": {
-      "hint": "已依上次填寫回填私有部署位址（Base URL）。API Key 需你自行填寫。",
+      "hint": "私有化部署位址（Base URL）已回填，API Key 請按需填寫",
       "fillKey": "填入上次的 Key",
       "keyFilled": "已填入上次的 Key"
     }
