@@ -7,10 +7,14 @@ import {
   ArrowRight,
   ChevronDown,
   ChevronRight,
+  Copy,
   Download,
+  Eye,
+  EyeOff,
   Loader2,
   Network,
   Plus,
+  RefreshCw,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -71,6 +75,7 @@ import {
 } from "@/lib/api/providers";
 import { settingsApi, type EnterpriseProfile } from "@/lib/api";
 import { resolveManagedAccountId } from "@/lib/authBinding";
+import { copyText } from "@/lib/clipboard";
 import { requiresClaudeDesktopLocalRoute } from "@/utils/claudeDesktopConnection";
 
 export type ClaudeDesktopProviderFormValues = ProviderFormData & {
@@ -91,6 +96,7 @@ type PresetEntry = {
 };
 
 export interface ClaudeDesktopProviderFormProps {
+  providerId?: string;
   submitLabel: string;
   onSubmit: (values: ClaudeDesktopProviderFormValues) => Promise<void> | void;
   onCancel: () => void;
@@ -252,6 +258,7 @@ function defaultRouteRows(
 }
 
 export function ClaudeDesktopProviderForm({
+  providerId,
   submitLabel,
   onSubmit,
   onCancel,
@@ -263,6 +270,8 @@ export function ClaudeDesktopProviderForm({
   const initialMode = initialData?.meta?.claudeDesktopMode ?? "direct";
   const [mode, setMode] = useState<"direct" | "proxy">(initialMode);
   const usesLocalRoute = mode === "proxy";
+  const [showGatewayToken, setShowGatewayToken] = useState(false);
+  const [isSyncingGatewayToken, setIsSyncingGatewayToken] = useState(false);
   const [apiFormat, setApiFormat] = useState<ClaudeApiFormat>(
     initialData?.meta?.apiFormat ?? "anthropic",
   );
@@ -343,6 +352,23 @@ export function ClaudeDesktopProviderForm({
     queryKey: ["claudeDesktopDefaultRoutes"],
     queryFn: () => providersApi.getClaudeDesktopDefaultRoutes(),
   });
+  const {
+    data: gatewayToken = "",
+    isLoading: isGatewayTokenLoading,
+    refetch: refetchGatewayToken,
+  } = useQuery({
+    queryKey: ["claudeDesktopGatewayToken"],
+    queryFn: () => providersApi.getClaudeDesktopGatewayToken(),
+    enabled: usesLocalRoute,
+    staleTime: Infinity,
+  });
+  const { data: currentClaudeDesktopProviderId = "" } = useQuery({
+    queryKey: ["claudeDesktopCurrentProvider"],
+    queryFn: () => providersApi.getCurrent("claude-desktop"),
+    enabled: usesLocalRoute && Boolean(providerId),
+  });
+  const canResyncGatewayToken =
+    Boolean(providerId) && providerId === currentClaudeDesktopProviderId;
   const defaultProxyRouteRows = useMemo(
     () =>
       defaultRouteRows(
@@ -627,6 +653,38 @@ export function ClaudeDesktopProviderForm({
       });
     } finally {
       setIsFetchingModels(false);
+    }
+  };
+
+  const handleCopyGatewayToken = async () => {
+    if (!gatewayToken) return;
+    try {
+      await copyText(gatewayToken);
+      toast.success(
+        t("claudeDesktop.gatewayTokenCopied", {
+          defaultValue: "内部 Token 已复制",
+        }),
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const handleResyncGatewayToken = async () => {
+    if (!providerId || !canResyncGatewayToken) return;
+    setIsSyncingGatewayToken(true);
+    try {
+      await providersApi.resyncClaudeDesktopGatewayToken(providerId);
+      await refetchGatewayToken();
+      toast.success(
+        t("claudeDesktop.gatewayTokenSynced", {
+          defaultValue: "Gateway 凭证已同步，请重启 Claude Desktop",
+        }),
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsSyncingGatewayToken(false);
     }
   };
 
@@ -1008,6 +1066,95 @@ export function ClaudeDesktopProviderForm({
                   })}
                 />
               </div>
+
+              {usesLocalRoute && (
+                <div className="space-y-2 border-t border-border-default pt-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <Label htmlFor="claude-desktop-gateway-token">
+                      {t("claudeDesktop.gatewayTokenLabel", {
+                        defaultValue: "内部 Gateway Token",
+                      })}
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1"
+                      onClick={handleResyncGatewayToken}
+                      disabled={!canResyncGatewayToken || isSyncingGatewayToken}
+                    >
+                      <RefreshCw
+                        className={`h-3.5 w-3.5 ${
+                          isSyncingGatewayToken ? "animate-spin" : ""
+                        }`}
+                      />
+                      {t("claudeDesktop.gatewayTokenResync", {
+                        defaultValue: "重新同步",
+                      })}
+                    </Button>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      id="claude-desktop-gateway-token"
+                      type={showGatewayToken ? "text" : "password"}
+                      value={gatewayToken}
+                      readOnly
+                      placeholder={
+                        isGatewayTokenLoading
+                          ? t("common.loading", { defaultValue: "加载中..." })
+                          : ""
+                      }
+                      className="font-mono"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setShowGatewayToken((visible) => !visible)}
+                      disabled={!gatewayToken}
+                      aria-label={t(
+                        showGatewayToken
+                          ? "claudeDesktop.gatewayTokenHide"
+                          : "claudeDesktop.gatewayTokenShow",
+                        {
+                          defaultValue: showGatewayToken
+                            ? "隐藏内部 Token"
+                            : "显示内部 Token",
+                        },
+                      )}
+                    >
+                      {showGatewayToken ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={handleCopyGatewayToken}
+                      disabled={!gatewayToken}
+                      aria-label={t("claudeDesktop.gatewayTokenCopy", {
+                        defaultValue: "复制内部 Token",
+                      })}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {canResyncGatewayToken
+                      ? t("claudeDesktop.gatewayTokenHint", {
+                          defaultValue:
+                            "该 Token 用于 Claude Desktop 连接本机 Gateway。重新同步后请重启 Claude Desktop。",
+                        })
+                      : t("claudeDesktop.gatewayTokenInactiveHint", {
+                          defaultValue:
+                            "该 Token 由所有 Claude Desktop 本地路由供应商共用。保存并切换到此供应商后可以重新同步。",
+                        })}
+                  </p>
+                </div>
+              )}
             </div>
 
             {usesLocalRoute && (

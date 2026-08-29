@@ -1272,6 +1272,8 @@ pub fn run() {
             commands::import_default_config,
             commands::get_claude_desktop_status,
             commands::get_claude_desktop_default_routes,
+            commands::get_claude_desktop_gateway_token,
+            commands::resync_claude_desktop_gateway_token,
             commands::import_claude_desktop_providers_from_claude,
             commands::ensure_claude_desktop_official_provider,
             commands::get_claude_config_status,
