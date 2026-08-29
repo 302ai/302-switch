@@ -1364,6 +1364,14 @@ export function FirstRunNoticeDialog() {
                 </div>
               )}
 
+              {selection.claude && (
+                <p className="text-xs text-muted-foreground">
+                  {t("onboarding.modelModeHint", {
+                    defaultValue: "不确定就用「跟随官方调用」，之后随时能改。",
+                  })}
+                </p>
+              )}
+
               {selection.claude && modelMode === "fixed" && (
                 <div className="grid gap-3 rounded-lg border border-border bg-muted/20 p-4 sm:grid-cols-2">
                   {(
