@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   ArrowRight,
@@ -107,6 +108,22 @@ const APP_DETAILS: Record<
     icon: "gemini",
     configLabel: "~/.gemini/.env",
   },
+};
+
+// 检测不到 CLI 时给一条能直接复制粘贴的安装命令——下载这个 app 的小白
+// 八成还没装工具，光标一句"未检测到"就是死胡同。命令与 AboutSection 里那份
+// 一键安装清单保持一致（纯 npm，跨平台都能跑）。
+const APP_INSTALL_COMMANDS: Record<Ai302OnboardingApp, string> = {
+  claude: "npm i -g @anthropic-ai/claude-code@latest",
+  codex: "npm i -g @openai/codex@latest",
+  gemini: "npm i -g @google/gemini-cli@latest",
+};
+
+// 配完之后在终端里真正跑起来的命令——完成页照着念给用户即可。
+const APP_LAUNCH_COMMANDS: Record<Ai302OnboardingApp, string> = {
+  claude: "claude",
+  codex: "codex",
+  gemini: "gemini",
 };
 
 const INITIAL_TOOLS: Record<Ai302OnboardingApp, ToolResult> = {
@@ -710,11 +727,33 @@ export function FirstRunNoticeDialog() {
     }
   }, [apiKey, detectTools, edition, region, selectedApps, t, verifyKey]);
 
+  const copyInstallCommand = useCallback(
+    async (command: string) => {
+      try {
+        await navigator.clipboard.writeText(command);
+        toast.success(t("settings.installCommandsCopied"), {
+          closeButton: true,
+        });
+      } catch {
+        toast.error(t("settings.installCommandsCopyFailed"));
+      }
+    },
+    [t],
+  );
+
   const goBack = () => setStep((current) => Math.max(0, current - 1));
   const goNext = () => setStep((current) => Math.min(6, current + 1));
   const allConfigured =
     configureResults.length > 0 &&
     configureResults.every((result) => result.success);
+  // 完成页只对"真的配成了"的客户端给出终端命令，配失败的不误导用户去跑。
+  const launchableApps = useMemo(
+    () =>
+      configureResults
+        .filter((result) => result.success)
+        .map((result) => result.appId),
+    [configureResults],
+  );
 
   const enterpriseBrand =
     edition === "enterprise" ? detectAi302BrandName(resolvedBaseUrlRoot) : null;
@@ -1025,6 +1064,27 @@ export function FirstRunNoticeDialog() {
                                     defaultValue: "未检测到",
                                   })}
                         </div>
+                        {(result.state === "missing" ||
+                          result.state === "broken") && (
+                          <div className="mt-1.5 flex items-center gap-2">
+                            <code className="min-w-0 flex-1 truncate rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground">
+                              {APP_INSTALL_COMMANDS[appId]}
+                            </code>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void copyInstallCommand(
+                                  APP_INSTALL_COMMANDS[appId],
+                                )
+                              }
+                              className="flex-shrink-0 text-xs font-medium text-primary hover:underline"
+                            >
+                              {t("onboarding.copyInstallCommand", {
+                                defaultValue: "复制安装命令",
+                              })}
+                            </button>
+                          </div>
+                        )}
                       </div>
                       {result.state === "checking" ||
                       result.state === "idle" ? (
@@ -1487,6 +1547,38 @@ export function FirstRunNoticeDialog() {
                   </div>
                 ))}
               </div>
+              {launchableApps.length > 0 && (
+                <div className="space-y-2.5 rounded-lg border border-border bg-muted/20 p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <TerminalSquare className="h-4 w-4 text-primary" />
+                    {t("onboarding.nextStepsTitle", {
+                      defaultValue: "接下来：在终端里用起来",
+                    })}
+                  </div>
+                  <ul className="space-y-1.5">
+                    {launchableApps.map((appId) => (
+                      <li
+                        key={appId}
+                        className="flex items-center gap-2 text-xs text-muted-foreground"
+                      >
+                        <span className="min-w-0 truncate">
+                          {APP_DETAILS[appId].name}
+                        </span>
+                        <span aria-hidden="true">→</span>
+                        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">
+                          {APP_LAUNCH_COMMANDS[appId]}
+                        </code>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {t("onboarding.nextStepsRestartHint", {
+                      defaultValue:
+                        "已经打开的终端需要重开一个新窗口，配置才会生效。",
+                    })}
+                  </p>
+                </div>
+              )}
               {verifyState === "error" && (
                 <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
                   <XCircle className="h-4 w-4 flex-shrink-0" />

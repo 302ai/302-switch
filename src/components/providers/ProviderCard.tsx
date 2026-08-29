@@ -1,5 +1,11 @@
 import { useMemo, useState, useEffect } from "react";
-import { GripVertical, ChevronDown, ChevronUp, Route } from "lucide-react";
+import {
+  GripVertical,
+  ChevronDown,
+  ChevronUp,
+  Route,
+  KeyRound,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type {
   DraggableAttributes,
@@ -20,6 +26,7 @@ import {
   getAi302ModelStrategy,
   isAi302CustomEndpoint,
   isAi302SeedProvider,
+  readAi302ApiKey,
   readAi302BaseUrl,
 } from "@/config/ai302";
 import { ProviderHealthBadge } from "@/components/providers/ProviderHealthBadge";
@@ -249,6 +256,18 @@ export function ProviderCard({
         : false,
     [appId, isAi302Seed, provider.settingsConfig],
   );
+  // 302.AI 种子卡还没填 Key 时，切换只会拿空 Key 激活然后失败——给张明显的
+  // CTA 引导小白先去填 Key，而不是让他对着一张"看起来配好了"的卡直接点切换。
+  const ai302NeedsKey = useMemo(
+    () =>
+      isAi302Seed &&
+      !readAi302ApiKey(
+        appId,
+        provider.settingsConfig as Record<string, unknown>,
+      ).trim(),
+    [isAi302Seed, appId, provider.settingsConfig],
+  );
+
   const codexNeedsRouting = useMemo(() => {
     if (appId !== "codex" || provider.category === "official") return false;
     if (provider.meta?.apiFormat === "openai_chat") return true;
@@ -536,6 +555,21 @@ export function ProviderCard({
                       })}
                 </span>
               </div>
+            )}
+            {ai302NeedsKey && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(provider);
+                }}
+                className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-500/20 dark:text-amber-300"
+              >
+                <KeyRound className="h-3.5 w-3.5 flex-shrink-0" />
+                {t("provider.fillKeyCta", {
+                  defaultValue: "点此填入 API Key 才能使用",
+                })}
+              </button>
             )}
           </div>
         </div>

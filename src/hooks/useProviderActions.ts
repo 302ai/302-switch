@@ -252,6 +252,11 @@ export function useProviderActions(
           if (activeApp === "codex") {
             messageKey = "notifications.codexRestartRequired";
             defaultMessage = "切换成功，请重启客户端以生效";
+          } else if (activeApp === "claude") {
+            // Claude Code 在进程启动时读取配置，已经开着的会话不会热加载——
+            // 明确告诉用户去新终端运行 claude，否则小白配完不知道下一步。
+            messageKey = "notifications.claudeRestartRequired";
+            defaultMessage = "切换成功，在新终端运行 claude 即可生效";
           } else if (activeApp === "claude-desktop") {
             if (provider.meta?.claudeDesktopMode === "proxy") {
               messageKey = "notifications.claudeDesktopProxyRestartRequired";
