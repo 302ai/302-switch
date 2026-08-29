@@ -2,7 +2,13 @@ import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
-import { providersApi, settingsApi, openclawApi, type AppId } from "@/lib/api";
+import {
+  providersApi,
+  settingsApi,
+  openclawApi,
+  proxyApi,
+  type AppId,
+} from "@/lib/api";
 import type {
   Provider,
   UsageScript,
@@ -155,6 +161,10 @@ export function useProviderActions(
       const isCopilotProvider =
         activeApp === "claude" &&
         provider.meta?.providerType === "github_copilot";
+      const shouldAutoStartClaudeDesktopRoute =
+        activeApp === "claude-desktop" &&
+        provider.meta?.claudeDesktopMode === "proxy" &&
+        !isProxyRunning;
       const isCodexChatFormat =
         activeApp === "codex" &&
         (provider.meta?.apiFormat === "openai_chat" ||
@@ -192,13 +202,6 @@ export function useProviderActions(
             defaultValue: "使用 OpenAI Chat 接口格式",
           });
         } else if (
-          activeApp === "claude-desktop" &&
-          provider.meta?.claudeDesktopMode === "proxy"
-        ) {
-          proxyRequiredReason = t("notifications.proxyReasonClaudeDesktop", {
-            defaultValue: "使用 Claude Desktop 本地路由模式",
-          });
-        } else if (
           provider.meta?.isFullUrl &&
           (activeApp === "claude" || activeApp === "codex")
         ) {
@@ -216,6 +219,24 @@ export function useProviderActions(
               "此供应商{{reason}}，需要代理服务才能正常使用，请先启动代理",
           }),
         );
+      }
+
+      if (shouldAutoStartClaudeDesktopRoute) {
+        try {
+          await proxyApi.startProxyServer();
+          await queryClient.invalidateQueries({ queryKey: ["proxyStatus"] });
+        } catch (error) {
+          const detail =
+            extractErrorMessage(error) ||
+            t("common.unknown", { defaultValue: "未知错误" });
+          toast.error(
+            t("proxy.server.startFailed", {
+              detail,
+              defaultValue: `启动代理服务失败: ${detail}`,
+            }),
+          );
+          return;
+        }
       }
 
       // Block official providers when proxy takeover is active
