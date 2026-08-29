@@ -197,7 +197,8 @@ export function EnvWarningBanner({
                         </div>
                         <span className="text-xs text-muted-foreground">
                           {t("env.group.fileHint", {
-                            defaultValue: "来自配置文件，可安全删除（自动备份、可恢复）",
+                            defaultValue:
+                              "来自配置文件，可安全删除（自动备份、可恢复）",
                           })}
                         </span>
                       </div>

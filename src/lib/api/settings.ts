@@ -56,9 +56,7 @@ export const settingsApi = {
   },
 
   /** 写企业私有化档案；传 null 清除（切回公共版时用） */
-  async setEnterpriseProfile(
-    profile: EnterpriseProfile | null,
-  ): Promise<void> {
+  async setEnterpriseProfile(profile: EnterpriseProfile | null): Promise<void> {
     await invoke("set_enterprise_profile", { profile });
   },
 

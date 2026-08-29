@@ -59,7 +59,10 @@ export function useApiKeyLink({
       const preset = currentPresetEntry.preset;
       // 企业私有化：获取 Key 链接必须指向用户自己填的 Base URL，而不是预设里写死的
       // 302.ai——企业自建部署跟 302 公共接口无关。地址还没填时回退到空（链接不显示）。
-      if ("nameKey" in preset && preset.nameKey === "providerPreset.enterprise") {
+      if (
+        "nameKey" in preset &&
+        preset.nameKey === "providerPreset.enterprise"
+      ) {
         return formWebsiteUrl || "";
       }
       // 对于 cn_official、aggregator、third_party，优先使用 apiKeyUrl（可能包含推广参数）

@@ -579,7 +579,10 @@ export function FirstRunNoticeDialog() {
             );
           }
           const settingsConfig = buildConfig(template);
-          const existing = findEnterpriseProvider(providers, resolvedBaseUrlRoot);
+          const existing = findEnterpriseProvider(
+            providers,
+            resolvedBaseUrlRoot,
+          );
           const enterprise: Provider = {
             ...(existing ?? {}),
             id: existing?.id ?? generateUUID(),
