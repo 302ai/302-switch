@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getAi302ApiKeyUrl,
   getAi302ModelStrategy,
   readAi302ApiKey,
   readAi302BaseUrl,
@@ -7,6 +8,21 @@ import {
 } from "./ai302";
 
 describe("ai302 config helpers", () => {
+  it("uses the domestic site for the domestic API node", () => {
+    expect(getAi302ApiKeyUrl("https://api.302ai.cn/v1")).toBe(
+      "https://302ai.cn",
+    );
+    expect(getAi302ApiKeyUrl("https://API.302AI.CN/v1")).toBe(
+      "https://302ai.cn",
+    );
+  });
+
+  it("keeps the overseas console for the overseas API node", () => {
+    expect(getAi302ApiKeyUrl("https://api.302.ai/v1")).toBe(
+      "https://dash.302.ai/apis/list",
+    );
+  });
+
   it("reads and writes the app-specific API key fields", () => {
     const claude = writeAi302ApiKey(
       "claude",

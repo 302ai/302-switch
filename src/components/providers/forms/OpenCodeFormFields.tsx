@@ -155,6 +155,8 @@ interface OpenCodeFormFieldsProps {
   websiteUrl: string;
   isPartner?: boolean;
   partnerPromotionKey?: string;
+  onGetApiKey?: () => void;
+  getApiKeyDisabled?: boolean;
 
   // Base URL
   baseUrl: string;
@@ -179,6 +181,8 @@ export function OpenCodeFormFields({
   websiteUrl,
   isPartner,
   partnerPromotionKey,
+  onGetApiKey,
+  getApiKeyDisabled,
   baseUrl,
   onBaseUrlChange,
   models,
@@ -485,6 +489,8 @@ export function OpenCodeFormFields({
         websiteUrl={websiteUrl}
         isPartner={isPartner}
         partnerPromotionKey={partnerPromotionKey}
+        onGetApiKey={onGetApiKey}
+        getApiKeyDisabled={getApiKeyDisabled}
       />
 
       {/* Base URL */}

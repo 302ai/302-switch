@@ -56,6 +56,8 @@ interface OpenClawFormFieldsProps {
   websiteUrl: string;
   isPartner?: boolean;
   partnerPromotionKey?: string;
+  onGetApiKey?: () => void;
+  getApiKeyDisabled?: boolean;
 
   // API Protocol
   api: string;
@@ -80,6 +82,8 @@ export function OpenClawFormFields({
   websiteUrl,
   isPartner,
   partnerPromotionKey,
+  onGetApiKey,
+  getApiKeyDisabled,
   api,
   onApiChange,
   models,
@@ -264,6 +268,8 @@ export function OpenClawFormFields({
         websiteUrl={websiteUrl}
         isPartner={isPartner}
         partnerPromotionKey={partnerPromotionKey}
+        onGetApiKey={onGetApiKey}
+        getApiKeyDisabled={getApiKeyDisabled}
       />
 
       {/* User-Agent */}

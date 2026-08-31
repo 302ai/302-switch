@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   CheckCircle2,
@@ -28,9 +28,9 @@ import ApiKeyInput from "@/components/providers/forms/ApiKeyInput";
 import { Input } from "@/components/ui/input";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import {
-  AI302_API_KEY_URL,
   detectAi302ApiKeyLabel,
   detectAi302BrandName,
+  getAi302ApiKeyUrl,
   getAi302ModelStrategy,
   isAi302CustomEndpoint,
   isValidAi302BaseUrl,
@@ -43,6 +43,7 @@ import {
 import { fetchModelsForConfig, probeChatKey } from "@/lib/api/model-fetch";
 import { settingsApi, type AppId } from "@/lib/api";
 import type { Provider } from "@/types";
+import { useEnterpriseApiKeyAuthorization } from "@/hooks/useEnterpriseApiKeyAuthorization";
 
 // 302 内置供应商的专属编辑框：接口地址已预置，模型策略在表单内明确展示。
 // 「一键诊断」使用模型列表接口检查 key 与网络，不产生模型调用费用。
@@ -80,6 +81,13 @@ export function Ai302KeyDialog({
   const [baseUrlInput, setBaseUrlInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [verify, setVerify] = useState<VerifyState>({ status: "idle" });
+  const [
+    authorizationVerificationRequired,
+    setAuthorizationVerificationRequired,
+  ] = useState(false);
+  const [authorizedKey, setAuthorizedKey] = useState("");
+  const apiKeyRef = useRef("");
+  const baseUrlInputRef = useRef("");
 
   const initialKey = useMemo(
     () =>
@@ -108,15 +116,15 @@ export function Ai302KeyDialog({
     if (open) {
       setApiKey(initialKey);
       setBaseUrlInput(initialBaseUrl);
+      apiKeyRef.current = initialKey;
+      baseUrlInputRef.current = initialBaseUrl;
       setVerify({ status: "idle" });
+      setAuthorizationVerificationRequired(false);
+      setAuthorizedKey("");
     }
   }, [open, initialKey, initialBaseUrl]);
 
-  if (!provider) {
-    return null;
-  }
-
-  const config = provider.settingsConfig as Record<string, unknown>;
+  const config = (provider?.settingsConfig ?? {}) as Record<string, unknown>;
   const modelStrategy = getAi302ModelStrategy(appId, config);
   const baseUrl = readAi302BaseUrl(appId, config);
   // 非标准 302.AI 域名 = 企业私有部署，地址在这里可编辑；标准域名（国内/海外）只读展示。
@@ -140,6 +148,13 @@ export function Ai302KeyDialog({
 
   const handleVerify = async (key: string) => {
     const trimmed = key.trim();
+    const verificationRoot = isCustomEndpoint
+      ? normalizeAi302RootUrl(baseUrlInputRef.current)
+      : baseUrl;
+    const isCurrentVerification = () =>
+      apiKeyRef.current.trim() === trimmed &&
+      (!isCustomEndpoint ||
+        normalizeAi302RootUrl(baseUrlInputRef.current) === verificationRoot);
     if (!trimmed) {
       setVerify({ status: "fail", reason: "empty" });
       return;
@@ -150,12 +165,12 @@ export function Ai302KeyDialog({
     }
     setVerify({ status: "loading" });
     try {
-      const probeUrl = isCustomEndpoint
-        ? normalizeAi302RootUrl(baseUrlInput)
-        : baseUrl;
-      const models = await fetchModelsForConfig(probeUrl, trimmed);
+      const models = await fetchModelsForConfig(verificationRoot, trimmed);
+      if (!isCurrentVerification()) return;
       setVerify({ status: "ok", modelCount: models.length });
+      setAuthorizationVerificationRequired(false);
     } catch (err) {
+      if (!isCurrentVerification()) return;
       const msg = String(err);
       const isAuthError = msg.includes("HTTP 401") || msg.includes("HTTP 403");
 
@@ -163,12 +178,11 @@ export function Ai302KeyDialog({
       // 降级用 chat/completions 探活兜底确认（详见 probe_chat_key）。
       if (isAuthError && isCustomEndpoint) {
         try {
-          const probe = await probeChatKey(
-            normalizeAi302RootUrl(baseUrlInput),
-            trimmed,
-          );
+          const probe = await probeChatKey(verificationRoot, trimmed);
+          if (!isCurrentVerification()) return;
           if (probe.outcome === "ok") {
             setVerify({ status: "ok", modelCount: 0, viaChat: true });
+            setAuthorizationVerificationRequired(false);
             return;
           }
           if (probe.outcome === "unreachable") {
@@ -181,9 +195,35 @@ export function Ai302KeyDialog({
         }
       }
 
+      if (!isCurrentVerification()) return;
       setVerify({ status: "fail", reason: isAuthError ? "key" : "network" });
     }
   };
+
+  const handleAuthorizedKey = useCallback(
+    (key: string) => {
+      setApiKey(key);
+      apiKeyRef.current = key;
+      setVerify({ status: "idle" });
+      setAuthorizationVerificationRequired(true);
+      setAuthorizedKey(key);
+      void handleVerify(key);
+    },
+    [baseUrlInput, baseUrl, baseUrlValid, isCustomEndpoint],
+  );
+  const enterpriseAuthorization = useEnterpriseApiKeyAuthorization(
+    "editor",
+    handleAuthorizedKey,
+  );
+
+  useEffect(() => {
+    if (!open) enterpriseAuthorization.discard();
+    return () => enterpriseAuthorization.discard();
+  }, [open, provider?.id, enterpriseAuthorization.discard]);
+
+  if (!provider) {
+    return null;
+  }
 
   const handleSave = async () => {
     setIsSubmitting(true);
@@ -289,8 +329,13 @@ export function Ai302KeyDialog({
                 id="ai302-base-url"
                 value={baseUrlInput}
                 onChange={(event) => {
-                  setBaseUrlInput(event.target.value);
+                  const value = event.target.value;
+                  setBaseUrlInput(value);
+                  baseUrlInputRef.current = value;
                   setVerify({ status: "idle" });
+                  if (authorizedKey && apiKeyRef.current === authorizedKey) {
+                    setAuthorizationVerificationRequired(true);
+                  }
                 }}
                 placeholder="https://your-company.302.ai"
               />
@@ -310,6 +355,9 @@ export function Ai302KeyDialog({
             value={apiKey}
             onChange={(value) => {
               setApiKey(value);
+              apiKeyRef.current = value;
+              setAuthorizationVerificationRequired(false);
+              if (value !== authorizedKey) setAuthorizedKey("");
               // key 一变，旧的验证结论就不作数了
               setVerify({ status: "idle" });
             }}
@@ -323,15 +371,41 @@ export function Ai302KeyDialog({
 
           <div className="flex items-center justify-between gap-3">
             {isCustomEndpoint ? (
-              <span className="text-xs text-muted-foreground">
-                {t("onboarding.enterpriseKeyHint", {
-                  defaultValue: "在企业版管理后台生成 API Key",
-                })}
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    void enterpriseAuthorization.start(
+                      normalizeAi302RootUrl(baseUrlInput),
+                    )
+                  }
+                  disabled={
+                    !baseUrlValid ||
+                    enterpriseAuthorization.status === "waiting"
+                  }
+                  className="inline-flex items-center gap-1 text-sm text-primary hover:underline disabled:pointer-events-none disabled:opacity-50"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  {t("onboarding.getEnterpriseKey", {
+                    defaultValue: "获取 API Key",
+                  })}
+                </button>
+                {enterpriseAuthorization.status === "waiting" && (
+                  <button
+                    type="button"
+                    onClick={enterpriseAuthorization.cancel}
+                    className="text-xs text-muted-foreground hover:underline"
+                  >
+                    {t("common.cancel", { defaultValue: "取消" })}
+                  </button>
+                )}
+              </div>
             ) : (
               <button
                 type="button"
-                onClick={() => void settingsApi.openExternal(AI302_API_KEY_URL)}
+                onClick={() =>
+                  void settingsApi.openExternal(getAi302ApiKeyUrl(baseUrl))
+                }
                 className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
@@ -356,6 +430,26 @@ export function Ai302KeyDialog({
 
           {/* 占位固定高度，验证结果出现时布局不跳动 */}
           <div className="min-h-5 text-sm">{verifyLine}</div>
+          {enterpriseAuthorization.status !== "idle" &&
+            enterpriseAuthorization.status !== "waiting" && (
+              <div className="text-sm text-destructive">
+                {enterpriseAuthorization.status === "pageUnavailable"
+                  ? t("onboarding.authorizationPageUnavailable", {
+                      defaultValue: "授权页面无法访问，请检查地址和网络",
+                    })
+                  : enterpriseAuthorization.status === "cancelled"
+                    ? t("onboarding.authorizationCancelled", {
+                        defaultValue: "已取消获取 API Key",
+                      })
+                    : enterpriseAuthorization.status === "stateMismatch"
+                      ? t("onboarding.authorizationStateMismatch", {
+                          defaultValue: "授权状态不匹配，请重新获取",
+                        })
+                      : t("onboarding.authorizationInvalidCallback", {
+                          defaultValue: "授权返回内容无效，请重新获取",
+                        })}
+              </div>
+            )}
 
           <div className="rounded-lg border border-border bg-muted/30 p-3.5">
             <div className="flex items-start gap-3">
@@ -472,6 +566,7 @@ export function Ai302KeyDialog({
             disabled={
               isSubmitting ||
               !apiKey.trim() ||
+              authorizationVerificationRequired ||
               (isCustomEndpoint && !baseUrlValid)
             }
           >

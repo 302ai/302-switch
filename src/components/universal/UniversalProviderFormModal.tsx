@@ -450,20 +450,6 @@ requires_openai_auth = true`;
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="websiteUrl">
-              {t("universalProvider.websiteUrl", { defaultValue: "官网地址" })}
-            </Label>
-            <Input
-              id="websiteUrl"
-              value={websiteUrl}
-              onChange={(e) => setWebsiteUrl(e.target.value)}
-              placeholder={t("universalProvider.websiteUrlPlaceholder", {
-                defaultValue: "https://example.com（可选，用于在列表中显示）",
-              })}
-            />
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="notes">
               {t("universalProvider.notes", { defaultValue: "备注" })}
             </Label>

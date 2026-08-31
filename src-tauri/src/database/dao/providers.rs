@@ -884,6 +884,92 @@ impl Database {
                 }
             }
 
+            // 国内、海外两张内置卡片的请求地址必须与卡片区域一致。旧版企业版
+            // 引导曾把私有地址写进公共种子；企业版现在使用独立卡片，因此启动时
+            // 只恢复种子的地址字段，用户已经填写的 Key 和其他配置保持不变。
+            let expected_root = seed.website_url;
+            let expected_v1 = format!("{expected_root}/v1");
+            match seed.app_type {
+                AppType::Claude | AppType::ClaudeDesktop => {
+                    if provider.settings_config["env"]["ANTHROPIC_BASE_URL"].as_str()
+                        != Some(expected_root)
+                    {
+                        provider.settings_config["env"]["ANTHROPIC_BASE_URL"] =
+                            serde_json::Value::String(expected_root.to_string());
+                        changed = true;
+                    }
+                }
+                AppType::Gemini => {
+                    if provider.settings_config["env"]["GOOGLE_GEMINI_BASE_URL"].as_str()
+                        != Some(expected_root)
+                    {
+                        provider.settings_config["env"]["GOOGLE_GEMINI_BASE_URL"] =
+                            serde_json::Value::String(expected_root.to_string());
+                        changed = true;
+                    }
+                }
+                AppType::OpenCode => {
+                    if provider.settings_config["options"]["baseURL"].as_str()
+                        != Some(expected_v1.as_str())
+                    {
+                        provider.settings_config["options"]["baseURL"] =
+                            serde_json::Value::String(expected_v1.clone());
+                        changed = true;
+                    }
+                }
+                AppType::OpenClaw => {
+                    if provider.settings_config["baseUrl"].as_str() != Some(expected_root) {
+                        provider.settings_config["baseUrl"] =
+                            serde_json::Value::String(expected_root.to_string());
+                        changed = true;
+                    }
+                }
+                AppType::Hermes => {
+                    if provider.settings_config["base_url"].as_str() != Some(expected_v1.as_str()) {
+                        provider.settings_config["base_url"] =
+                            serde_json::Value::String(expected_v1.clone());
+                        changed = true;
+                    }
+                }
+                AppType::Codex => {
+                    if let Some(config_text) = provider
+                        .settings_config
+                        .get("config")
+                        .and_then(|value| value.as_str())
+                    {
+                        match config_text.parse::<toml_edit::DocumentMut>() {
+                            Ok(mut document) => {
+                                let active_provider = document
+                                    .get("model_provider")
+                                    .and_then(|value| value.as_str())
+                                    .map(str::to_string);
+                                if let Some(provider_id) = active_provider {
+                                    if let Some(table) = document
+                                        .get_mut("model_providers")
+                                        .and_then(|value| value.as_table_mut())
+                                        .and_then(|providers| providers.get_mut(&provider_id))
+                                        .and_then(|value| value.as_table_mut())
+                                    {
+                                        if table.get("base_url").and_then(|value| value.as_str())
+                                            != Some(expected_v1.as_str())
+                                        {
+                                            table["base_url"] = toml_edit::value(&expected_v1);
+                                            provider.settings_config["config"] =
+                                                serde_json::Value::String(document.to_string());
+                                            changed = true;
+                                        }
+                                    }
+                                }
+                            }
+                            Err(error) => log::warn!(
+                                "Skipping malformed Codex config while restoring 302.AI seed endpoint ({}): {error}",
+                                provider.id
+                            ),
+                        }
+                    }
+                }
+            }
+
             // 旧版 Codex 种子钉死了 model = "gpt-5.5"，现在默认改为自动路由
             // （不写 model 行，跟随客户端按任务自选）。只剥掉与旧默认逐字相同
             // 的那一行——用户自己改过的模型值不匹配，原样保留。
@@ -1386,7 +1472,7 @@ mod ensure_official_seed_tests {
         assert!(endpoints.contains_key("https://api.302.ai/v1"));
         assert!(!endpoints.contains_key(&legacy_url));
 
-        // 用户自定义的地址不是旧默认值，repair 不许碰（格式也保持用户的选择）
+        // 企业版现在使用独立卡片；内置海外卡即使残留自定义地址，也要恢复公共节点。
         let mut custom = repaired;
         custom.settings_config["config"] = serde_json::Value::String(
             "model_provider = \"custom\"\n\n[model_providers.custom]\nname = \"302ai\"\nbase_url = \"https://my-gateway.example.com/v1\"\nwire_api = \"responses\"".to_string(),
@@ -1403,7 +1489,7 @@ mod ensure_official_seed_tests {
         assert!(after.settings_config["config"]
             .as_str()
             .expect("toml")
-            .contains("base_url = \"https://my-gateway.example.com/v1\""));
+            .contains("base_url = \"https://api.302.ai/v1\""));
         assert_eq!(
             after.meta.and_then(|meta| meta.api_format),
             Some("openai_chat".to_string())
@@ -1449,8 +1535,41 @@ mod ensure_official_seed_tests {
         );
     }
 
-    /// 旧版只有一张 302 Codex 卡，用户从地址管理切到国内节点后，卡片 id 仍是
-    /// ai302-codex。修复不能只看国内卡 id，还要按实际地址迁移配置和候选端点。
+    #[test]
+    fn ai302_seed_repair_restores_domestic_endpoint_after_enterprise_overwrite() {
+        let db = Database::memory().expect("memory db");
+        db.init_ai302_providers().expect("seed");
+
+        let mut domestic = db
+            .get_provider_by_id("ai302-cn-codex", AppType::Codex.as_str())
+            .expect("query")
+            .expect("domestic codex seed");
+        domestic.settings_config["config"] = serde_json::Value::String(
+            "model_provider = \"custom\"\n\n[model_providers.custom]\nname = \"302ai-cn\"\nbase_url = \"https://enterprise.example.com/v1\"\nwire_api = \"responses\"\nrequires_openai_auth = false\nexperimental_bearer_token = \"preserved-key\""
+                .to_string(),
+        );
+        domestic.settings_config["auth"]["OPENAI_API_KEY"] =
+            serde_json::Value::String("preserved-key".to_string());
+        db.save_provider(AppType::Codex.as_str(), &domestic)
+            .expect("save overwritten seed");
+
+        db.init_ai302_providers().expect("repair");
+
+        let repaired = db
+            .get_provider_by_id("ai302-cn-codex", AppType::Codex.as_str())
+            .expect("query repaired")
+            .expect("repaired domestic provider");
+        let config = repaired.settings_config["config"].as_str().expect("toml");
+        assert!(config.contains("base_url = \"https://api.302ai.cn/v1\""));
+        assert!(config.contains("experimental_bearer_token = \"preserved-key\""));
+        assert_eq!(
+            repaired.settings_config["auth"]["OPENAI_API_KEY"].as_str(),
+            Some("preserved-key")
+        );
+    }
+
+    /// 国内版已有独立卡片后，旧海外卡残留的国内地址要恢复为海外公共节点；
+    /// 历史候选地址仍按其实际区域迁移到正确的 /v1。
     #[test]
     fn ai302_seed_repair_corrects_domestic_endpoint_on_legacy_overseas_card() {
         let db = Database::memory().expect("memory db");
@@ -1476,7 +1595,7 @@ mod ensure_official_seed_tests {
             .expect("query repaired")
             .expect("repaired provider");
         let config = repaired.settings_config["config"].as_str().expect("toml");
-        assert!(config.contains("base_url = \"https://api.302ai.cn/v1\""));
+        assert!(config.contains("base_url = \"https://api.302.ai/v1\""));
         assert!(!config.contains(&legacy_url));
         assert!(config.contains("requires_openai_auth = false"));
 

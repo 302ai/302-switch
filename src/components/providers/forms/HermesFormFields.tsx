@@ -62,6 +62,8 @@ interface HermesFormFieldsProps {
   websiteUrl: string;
   isPartner?: boolean;
   partnerPromotionKey?: string;
+  onGetApiKey?: () => void;
+  getApiKeyDisabled?: boolean;
   apiMode: HermesApiMode;
   onApiModeChange: (mode: HermesApiMode) => void;
   models: HermesModel[];
@@ -149,6 +151,8 @@ export function HermesFormFields({
   websiteUrl,
   isPartner,
   partnerPromotionKey,
+  onGetApiKey,
+  getApiKeyDisabled,
   apiMode,
   onApiModeChange,
   models,
@@ -337,6 +341,8 @@ export function HermesFormFields({
         websiteUrl={websiteUrl}
         isPartner={isPartner}
         partnerPromotionKey={partnerPromotionKey}
+        onGetApiKey={onGetApiKey}
+        getApiKeyDisabled={getApiKeyDisabled}
       />
 
       <div className="space-y-3">

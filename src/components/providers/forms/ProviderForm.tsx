@@ -14,8 +14,14 @@ import {
 } from "@/lib/requestOverrides";
 import { providersApi, settingsApi, type AppId } from "@/lib/api";
 import type { EnterpriseProfile } from "@/lib/api";
-import { writeAi302BaseUrl, writeAi302ApiKey } from "@/config/ai302";
+import {
+  isAi302CustomEndpoint,
+  normalizeAi302RootUrl,
+  writeAi302BaseUrl,
+  writeAi302ApiKey,
+} from "@/config/ai302";
 import { useDarkMode } from "@/hooks/useDarkMode";
+import { useEnterpriseApiKeyAuthorization } from "@/hooks/useEnterpriseApiKeyAuthorization";
 import type {
   ProviderCategory,
   ProviderMeta,
@@ -1625,6 +1631,35 @@ function ProviderFormFull({
     formWebsiteUrl: form.watch("websiteUrl") || "",
   });
 
+  const handleEnterpriseAuthorizedKey = useCallback(
+    (key: string) => {
+      if (appId === "claude") handleApiKeyChange(key);
+      if (appId === "codex") handleCodexApiKeyChange(key);
+      if (appId === "gemini") handleGeminiApiKeyChange(key);
+      if (appId === "opencode") {
+        opencodeForm.handleOpencodeApiKeyChange(key);
+      }
+      if (appId === "openclaw") {
+        openclawForm.handleOpenclawApiKeyChange(key);
+      }
+      if (appId === "hermes") hermesForm.handleHermesApiKeyChange(key);
+      setEnterpriseKeyFilled(true);
+    },
+    [
+      appId,
+      handleApiKeyChange,
+      handleCodexApiKeyChange,
+      handleGeminiApiKeyChange,
+      hermesForm.handleHermesApiKeyChange,
+      openclawForm.handleOpenclawApiKeyChange,
+      opencodeForm.handleOpencodeApiKeyChange,
+    ],
+  );
+  const enterpriseAuthorization = useEnterpriseApiKeyAuthorization(
+    "editor",
+    handleEnterpriseAuthorizedKey,
+  );
+
   // 使用端点测速候选 hook
   const speedTestEndpoints = useSpeedTestEndpoints({
     appId,
@@ -1905,6 +1940,39 @@ function ProviderFormFull({
   // 无论是否存过 key 都提示）。
   const isEnterprisePresetSelected =
     selectedPresetEntry?.preset.nameKey === "providerPreset.enterprise";
+  const enterpriseAuthorizationBaseUrl =
+    appId === "claude"
+      ? baseUrl
+      : appId === "codex"
+        ? codexBaseUrl
+        : appId === "gemini"
+          ? geminiBaseUrl
+          : appId === "opencode"
+            ? opencodeForm.opencodeBaseUrl
+            : appId === "openclaw"
+              ? openclawForm.openclawBaseUrl
+              : hermesForm.hermesBaseUrl;
+  const usesEnterpriseAuthorization =
+    isEnterprisePresetSelected ||
+    Boolean(
+      initialData?.name?.startsWith("302.AI（企业版") &&
+        isAi302CustomEndpoint(enterpriseAuthorizationBaseUrl),
+    );
+  const startEnterpriseAuthorization = usesEnterpriseAuthorization
+    ? () =>
+        void enterpriseAuthorization.start(
+          normalizeAi302RootUrl(enterpriseAuthorizationBaseUrl),
+        )
+    : undefined;
+
+  useEffect(() => {
+    if (!usesEnterpriseAuthorization) enterpriseAuthorization.discard();
+  }, [
+    enterpriseAuthorization.discard,
+    selectedPresetId,
+    usesEnterpriseAuthorization,
+  ]);
+
   const enterpriseApiKeyPlaceholder = isEnterprisePresetSelected
     ? t("providerForm.enterpriseApiKeyPlaceholder", {
         defaultValue: "点击下方按钮回填初始化 API Key 或 再次获取",
@@ -2203,6 +2271,8 @@ function ProviderFormFull({
               websiteUrl={claudeWebsiteUrl}
               isPartner={isClaudePartner}
               partnerPromotionKey={claudePartnerPromotionKey}
+              onGetApiKey={startEnterpriseAuthorization}
+              getApiKeyDisabled={enterpriseAuthorization.status === "waiting"}
               apiKeyAfterSlot={enterpriseKeyPrefillSlot}
               apiKeyPlaceholder={enterpriseApiKeyPlaceholder}
               isCopilotPreset={
@@ -2286,6 +2356,8 @@ function ProviderFormFull({
               websiteUrl={codexWebsiteUrl}
               isPartner={isCodexPartner}
               partnerPromotionKey={codexPartnerPromotionKey}
+              onGetApiKey={startEnterpriseAuthorization}
+              getApiKeyDisabled={enterpriseAuthorization.status === "waiting"}
               apiKeyAfterSlot={enterpriseKeyPrefillSlot}
               apiKeyPlaceholder={enterpriseApiKeyPlaceholder}
               shouldShowSpeedTest={shouldShowSpeedTest}
@@ -2333,6 +2405,8 @@ function ProviderFormFull({
               websiteUrl={geminiWebsiteUrl}
               isPartner={isGeminiPartner}
               partnerPromotionKey={geminiPartnerPromotionKey}
+              onGetApiKey={startEnterpriseAuthorization}
+              getApiKeyDisabled={enterpriseAuthorization.status === "waiting"}
               apiKeyAfterSlot={enterpriseKeyPrefillSlot}
               apiKeyPlaceholder={enterpriseApiKeyPlaceholder}
               shouldShowSpeedTest={shouldShowSpeedTest}
@@ -2361,6 +2435,8 @@ function ProviderFormFull({
               websiteUrl={opencodeWebsiteUrl}
               isPartner={isOpencodePartner}
               partnerPromotionKey={opencodePartnerPromotionKey}
+              onGetApiKey={startEnterpriseAuthorization}
+              getApiKeyDisabled={enterpriseAuthorization.status === "waiting"}
               baseUrl={opencodeForm.opencodeBaseUrl}
               onBaseUrlChange={opencodeForm.handleOpencodeBaseUrlChange}
               models={opencodeForm.opencodeModels}
@@ -2404,6 +2480,8 @@ function ProviderFormFull({
               websiteUrl={openclawWebsiteUrl}
               isPartner={isOpenclawPartner}
               partnerPromotionKey={openclawPartnerPromotionKey}
+              onGetApiKey={startEnterpriseAuthorization}
+              getApiKeyDisabled={enterpriseAuthorization.status === "waiting"}
               api={openclawForm.openclawApi}
               onApiChange={openclawForm.handleOpenclawApiChange}
               models={openclawForm.openclawModels}
@@ -2425,6 +2503,8 @@ function ProviderFormFull({
               websiteUrl={hermesWebsiteUrl}
               isPartner={isHermesPartner}
               partnerPromotionKey={hermesPartnerPromotionKey}
+              onGetApiKey={startEnterpriseAuthorization}
+              getApiKeyDisabled={enterpriseAuthorization.status === "waiting"}
               apiMode={hermesForm.hermesApiMode}
               onApiModeChange={hermesForm.handleHermesApiModeChange}
               models={hermesForm.hermesModels}
@@ -2435,6 +2515,28 @@ function ProviderFormFull({
               }
             />
           )}
+
+          {usesEnterpriseAuthorization &&
+            enterpriseAuthorization.status !== "idle" &&
+            enterpriseAuthorization.status !== "waiting" && (
+              <p className="text-sm text-destructive">
+                {enterpriseAuthorization.status === "pageUnavailable"
+                  ? t("onboarding.authorizationPageUnavailable", {
+                      defaultValue: "授权页面无法访问，请检查地址和网络",
+                    })
+                  : enterpriseAuthorization.status === "cancelled"
+                    ? t("onboarding.authorizationCancelled", {
+                        defaultValue: "已取消获取 API Key",
+                      })
+                    : enterpriseAuthorization.status === "stateMismatch"
+                      ? t("onboarding.authorizationStateMismatch", {
+                          defaultValue: "授权状态不匹配，请重新获取",
+                        })
+                      : t("onboarding.authorizationInvalidCallback", {
+                          defaultValue: "授权返回内容无效，请重新获取",
+                        })}
+              </p>
+            )}
 
           {/* 配置编辑器：Codex、Claude、Gemini 分别使用不同的编辑器 */}
           {appId === "codex" ? (

@@ -1,7 +1,36 @@
 //! Deep link module tests
 
 use super::mcp::parse_mcp_apps;
-use super::parser::parse_deeplink_url;
+use super::parser::{parse_authorization_callback, parse_deeplink_url};
+
+#[test]
+fn parses_authorization_callback_separately_from_imports() {
+    let callback = parse_authorization_callback(
+        "ccswitch302://auth/callback?state=one-time-state&api_key=secret-key",
+    )
+    .unwrap();
+
+    assert_eq!(callback.state, "one-time-state");
+    assert_eq!(callback.api_key, "secret-key");
+    assert!(parse_deeplink_url(
+        "ccswitch302://auth/callback?state=one-time-state&api_key=secret-key"
+    )
+    .is_err());
+}
+
+#[test]
+fn authorization_callback_rejects_missing_fields_and_extra_parameters() {
+    assert!(parse_authorization_callback("ccswitch302://auth/callback?state=state").is_err());
+    assert!(parse_authorization_callback("ccswitch302://auth/callback?api_key=key").is_err());
+    assert!(
+        parse_authorization_callback("ccswitch302://auth/callback?state=state&apiKey=old-key")
+            .is_err()
+    );
+    assert!(parse_authorization_callback(
+        "ccswitch302://auth/callback?state=state&api_key=key&endpoint=https%3A%2F%2Fevil.test"
+    )
+    .is_err());
+}
 use super::prompt::import_prompt_from_deeplink;
 use super::provider::parse_and_merge_config;
 use super::utils::{infer_homepage_from_endpoint, validate_url};

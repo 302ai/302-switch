@@ -9,6 +9,7 @@ const AI302_SEED_PREFIX = "ai302-";
 
 // 用户领取 / 查看 API Key 的入口页（302.AI 控制台）
 export const AI302_API_KEY_URL = "https://dash.302.ai/apis/list";
+export const AI302_API_KEY_URL_CN = "https://302ai.cn";
 
 // 302 聚合接口根地址（海外／国内两个标准节点，种子配置的默认值，验证 Key 时兜底用）
 export const AI302_API_BASE_URL = "https://api.302.ai";
@@ -62,6 +63,12 @@ export function isAi302CustomEndpoint(baseUrl: string): boolean {
 /** 去掉尾部斜杠和用户误粘贴的 /v1，得到统一的"根地址"，后续按各 app 的形状拼接。 */
 export function normalizeAi302RootUrl(input: string): string {
   return input.trim().replace(/\/+$/, "").replace(/\/v1$/i, "");
+}
+
+export function getAi302ApiKeyUrl(baseUrl: string): string {
+  return new URL(baseUrl).hostname === "api.302ai.cn"
+    ? AI302_API_KEY_URL_CN
+    : AI302_API_KEY_URL;
 }
 
 export function isValidAi302BaseUrl(input: string): boolean {

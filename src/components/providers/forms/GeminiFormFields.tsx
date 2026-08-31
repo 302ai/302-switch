@@ -28,6 +28,8 @@ interface GeminiFormFieldsProps {
   websiteUrl: string;
   isPartner?: boolean;
   partnerPromotionKey?: string;
+  onGetApiKey?: () => void;
+  getApiKeyDisabled?: boolean;
   apiKeyAfterSlot?: ReactNode;
   apiKeyPlaceholder?: string;
 
@@ -60,6 +62,8 @@ export function GeminiFormFields({
   websiteUrl,
   isPartner,
   partnerPromotionKey,
+  onGetApiKey,
+  getApiKeyDisabled,
   apiKeyAfterSlot,
   apiKeyPlaceholder,
   shouldShowSpeedTest,
@@ -145,6 +149,8 @@ export function GeminiFormFields({
           websiteUrl={websiteUrl}
           isPartner={isPartner}
           partnerPromotionKey={partnerPromotionKey}
+          onGetApiKey={onGetApiKey}
+          getApiKeyDisabled={getApiKeyDisabled}
           afterInputSlot={apiKeyAfterSlot}
           placeholderOverride={apiKeyPlaceholder}
         />

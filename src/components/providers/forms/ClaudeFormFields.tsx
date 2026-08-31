@@ -86,6 +86,8 @@ interface ClaudeFormFieldsProps {
   websiteUrl: string;
   isPartner?: boolean;
   partnerPromotionKey?: string;
+  onGetApiKey?: () => void;
+  getApiKeyDisabled?: boolean;
   apiKeyAfterSlot?: ReactNode;
   apiKeyPlaceholder?: string;
 
@@ -171,6 +173,8 @@ export function ClaudeFormFields({
   websiteUrl,
   isPartner,
   partnerPromotionKey,
+  onGetApiKey,
+  getApiKeyDisabled,
   apiKeyAfterSlot,
   apiKeyPlaceholder,
   isCopilotPreset,
@@ -639,6 +643,8 @@ export function ClaudeFormFields({
           websiteUrl={websiteUrl}
           isPartner={isPartner}
           partnerPromotionKey={partnerPromotionKey}
+          onGetApiKey={onGetApiKey}
+          getApiKeyDisabled={getApiKeyDisabled}
           afterInputSlot={apiKeyAfterSlot}
           placeholderOverride={apiKeyPlaceholder}
         />

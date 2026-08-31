@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -73,6 +73,7 @@ import { codexProviderPresets } from "@/config/codexProviderPresets";
 import { geminiProviderPresets } from "@/config/geminiProviderPresets";
 import type { Provider } from "@/types";
 import { cn } from "@/lib/utils";
+import { useEnterpriseApiKeyAuthorization } from "@/hooks/useEnterpriseApiKeyAuthorization";
 
 type ToolState = "idle" | "checking" | "installed" | "missing" | "broken";
 type VerifyState = "idle" | "checking" | "ok" | "error";
@@ -371,6 +372,7 @@ export function FirstRunNoticeDialog() {
     [],
   );
   const [isDiagnosing, setIsDiagnosing] = useState(false);
+  const verificationGeneration = useRef(0);
 
   const selectedApps = useMemo(
     () => AI302_ONBOARDING_APPS.filter((appId) => selection[appId]),
@@ -397,12 +399,14 @@ export function FirstRunNoticeDialog() {
   // 地址一变（改企业地址、切国内/海外），之前"验证通过"的结论就不作数了——
   // 否则从 step3 退回 step1 改完地址再前进，会拿着旧的 verifyState==="ok" 跳过重新验证。
   useEffect(() => {
+    verificationGeneration.current += 1;
     setVerifyState("idle");
     setVerifyError("");
     setVerifiedViaChat(false);
   }, [resolvedBaseUrlRoot]);
 
   const resetWizardState = useCallback(() => {
+    verificationGeneration.current += 1;
     setStep(0);
     setEdition("public");
     setRegion(guessDefaultRegion());
@@ -486,69 +490,96 @@ export function FirstRunNoticeDialog() {
     if (isOpen && step === 2 && !detectionStarted) void detectTools();
   }, [detectTools, detectionStarted, isOpen, step]);
 
-  const verifyKey = useCallback(async (): Promise<boolean> => {
-    const key = apiKey.trim();
-    if (!key) {
-      setVerifyState("error");
-      setVerifyError(
-        t("onboarding.keyRequired", { defaultValue: "请先填写 API Key" }),
-      );
-      return false;
-    }
-    setVerifyState("checking");
-    setVerifyError("");
-    try {
-      const models = await fetchModelsForConfig(resolvedBaseUrlRoot, key);
-      setModelCount(models.length);
-      setVerifiedViaChat(false);
-      setVerifyState("ok");
-      return true;
-    } catch (error) {
-      const message = String(error);
-      const authFailed = message.includes("401") || message.includes("403");
-
-      // 企业私有化 / 自签中转网关常不开放 GET /v1/models，401/403 未必是 key 坏。
-      // 降级用 POST /chat/completions 探活确认：真过了就判通过（详见 probe_chat_key）。
-      if (authFailed && edition === "enterprise") {
-        try {
-          const probe = await probeChatKey(resolvedBaseUrlRoot, key);
-          if (probe.outcome === "ok") {
-            setVerifiedViaChat(true);
-            setVerifyState("ok");
-            return true;
-          }
-          if (probe.outcome === "unreachable") {
-            setVerifyError(
-              t("onboarding.keyNetworkErrorEnterprise", {
-                defaultValue: "无法连接该地址，请检查 Base URL 是否正确",
-              }),
-            );
-            setVerifyState("error");
-            return false;
-          }
-          // outcome === "authFailed" → 确实是 key 坏，落到下面统一提示
-        } catch {
-          // 探活命令本身异常：退回按 /models 的原始结论提示，不吞错
-        }
+  const verifyKey = useCallback(
+    async (returnedKey?: string): Promise<boolean> => {
+      const key = (returnedKey ?? apiKey).trim();
+      const generation = verificationGeneration.current;
+      if (!key) {
+        setVerifyState("error");
+        setVerifyError(
+          t("onboarding.keyRequired", { defaultValue: "请先填写 API Key" }),
+        );
+        return false;
       }
+      setVerifyState("checking");
+      setVerifyError("");
+      try {
+        const models = await fetchModelsForConfig(resolvedBaseUrlRoot, key);
+        if (generation !== verificationGeneration.current) return false;
+        setModelCount(models.length);
+        setVerifiedViaChat(false);
+        setVerifyState("ok");
+        return true;
+      } catch (error) {
+        if (generation !== verificationGeneration.current) return false;
+        const message = String(error);
+        const authFailed = message.includes("401") || message.includes("403");
 
-      setVerifyError(
-        authFailed
-          ? t("onboarding.keyInvalid", {
-              defaultValue: "Key 无效或没有访问权限",
-            })
-          : edition === "enterprise"
-            ? t("onboarding.keyNetworkErrorEnterprise", {
-                defaultValue: "无法连接该地址，请检查 Base URL 是否正确",
+        // 企业私有化 / 自签中转网关常不开放 GET /v1/models，401/403 未必是 key 坏。
+        // 降级用 POST /chat/completions 探活确认：真过了就判通过（详见 probe_chat_key）。
+        if (authFailed && edition === "enterprise") {
+          try {
+            const probe = await probeChatKey(resolvedBaseUrlRoot, key);
+            if (generation !== verificationGeneration.current) return false;
+            if (probe.outcome === "ok") {
+              setVerifiedViaChat(true);
+              setVerifyState("ok");
+              return true;
+            }
+            if (probe.outcome === "unreachable") {
+              setVerifyError(
+                t("onboarding.keyNetworkErrorEnterprise", {
+                  defaultValue: "无法连接该地址，请检查 Base URL 是否正确",
+                }),
+              );
+              setVerifyState("error");
+              return false;
+            }
+            // outcome === "authFailed" → 确实是 key 坏，落到下面统一提示
+          } catch {
+            // 探活命令本身异常：退回按 /models 的原始结论提示，不吞错
+          }
+        }
+
+        if (generation !== verificationGeneration.current) return false;
+        setVerifyError(
+          authFailed
+            ? t("onboarding.keyInvalid", {
+                defaultValue: "Key 无效或没有访问权限",
               })
-            : t("onboarding.keyNetworkError", {
-                defaultValue: "无法连接 302.AI，请检查网络后重试",
-              }),
-      );
-      setVerifyState("error");
-      return false;
+            : edition === "enterprise"
+              ? t("onboarding.keyNetworkErrorEnterprise", {
+                  defaultValue: "无法连接该地址，请检查 Base URL 是否正确",
+                })
+              : t("onboarding.keyNetworkError", {
+                  defaultValue: "无法连接 302.AI，请检查网络后重试",
+                }),
+        );
+        setVerifyState("error");
+        return false;
+      }
+    },
+    [apiKey, edition, resolvedBaseUrlRoot, t],
+  );
+
+  const handleAuthorizedKey = useCallback(
+    (key: string) => {
+      verificationGeneration.current += 1;
+      setApiKey(key);
+      setVerifyError("");
+      void verifyKey(key);
+    },
+    [verifyKey],
+  );
+  const enterpriseAuthorization = useEnterpriseApiKeyAuthorization(
+    "onboarding",
+    handleAuthorizedKey,
+  );
+  useEffect(() => {
+    if (!isOpen || edition !== "enterprise") {
+      enterpriseAuthorization.discard();
     }
-  }, [apiKey, edition, resolvedBaseUrlRoot, t]);
+  }, [edition, enterpriseAuthorization.discard, isOpen]);
 
   const configureApp = useCallback(
     async (appId: Ai302OnboardingApp): Promise<ConfigureResult> => {
@@ -1213,6 +1244,7 @@ export function FirstRunNoticeDialog() {
                 id="onboarding-ai302-key"
                 value={apiKey}
                 onChange={(value) => {
+                  verificationGeneration.current += 1;
                   setApiKey(value);
                   setVerifyState("idle");
                   setVerifyError("");
@@ -1226,11 +1258,31 @@ export function FirstRunNoticeDialog() {
               />
               <div className="flex flex-wrap items-center justify-between gap-3">
                 {edition === "enterprise" ? (
-                  <span className="text-xs text-muted-foreground">
-                    {t("onboarding.enterpriseKeyHint", {
-                      defaultValue: "在企业版管理后台生成 API Key",
-                    })}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        void enterpriseAuthorization.start(resolvedBaseUrlRoot)
+                      }
+                      disabled={enterpriseAuthorization.status === "waiting"}
+                    >
+                      <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                      {t("onboarding.getEnterpriseKey", {
+                        defaultValue: "获取 API Key",
+                      })}
+                    </Button>
+                    {enterpriseAuthorization.status === "waiting" && (
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:underline"
+                        onClick={enterpriseAuthorization.cancel}
+                      >
+                        {t("common.cancel", { defaultValue: "取消" })}
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <button
                     type="button"
@@ -1280,6 +1332,26 @@ export function FirstRunNoticeDialog() {
                   {verifyError}
                 </div>
               )}
+              {enterpriseAuthorization.status !== "idle" &&
+                enterpriseAuthorization.status !== "waiting" && (
+                  <div className="text-sm text-destructive">
+                    {enterpriseAuthorization.status === "pageUnavailable"
+                      ? t("onboarding.authorizationPageUnavailable", {
+                          defaultValue: "授权页面无法访问，请检查地址和网络",
+                        })
+                      : enterpriseAuthorization.status === "cancelled"
+                        ? t("onboarding.authorizationCancelled", {
+                            defaultValue: "已取消获取 API Key",
+                          })
+                        : enterpriseAuthorization.status === "stateMismatch"
+                          ? t("onboarding.authorizationStateMismatch", {
+                              defaultValue: "授权状态不匹配，请重新获取",
+                            })
+                          : t("onboarding.authorizationInvalidCallback", {
+                              defaultValue: "授权返回内容无效，请重新获取",
+                            })}
+                  </div>
+                )}
             </div>
           )}
 

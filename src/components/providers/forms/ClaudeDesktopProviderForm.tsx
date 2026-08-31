@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
@@ -77,6 +77,8 @@ import { settingsApi, type EnterpriseProfile } from "@/lib/api";
 import { resolveManagedAccountId } from "@/lib/authBinding";
 import { copyText } from "@/lib/clipboard";
 import { requiresClaudeDesktopLocalRoute } from "@/utils/claudeDesktopConnection";
+import { isAi302CustomEndpoint, normalizeAi302RootUrl } from "@/config/ai302";
+import { useEnterpriseApiKeyAuthorization } from "@/hooks/useEnterpriseApiKeyAuthorization";
 
 export type ClaudeDesktopProviderFormValues = ProviderFormData & {
   presetId?: string;
@@ -452,6 +454,14 @@ export function ClaudeDesktopProviderForm({
   const selectedPresetEntry = selectedPresetId
     ? presetEntries.find((e) => e.id === selectedPresetId)
     : undefined;
+  const isEnterprisePresetSelected =
+    selectedPresetEntry?.preset.nameKey === "providerPreset.enterprise";
+  const usesEnterpriseAuthorization =
+    isEnterprisePresetSelected ||
+    Boolean(
+      initialData?.name?.startsWith("302.AI（企业版") &&
+        isAi302CustomEndpoint(baseUrl),
+    );
   const showEnterprisePrefill =
     !initialData &&
     selectedPresetEntry?.preset.nameKey === "providerPreset.enterprise" &&
@@ -476,6 +486,18 @@ export function ClaudeDesktopProviderForm({
     presetEntries,
     formWebsiteUrl: form.watch("websiteUrl") || "",
   });
+  const handleEnterpriseAuthorizedKey = useCallback((key: string) => {
+    setApiKey(key);
+    setEnterpriseKeyFilled(true);
+  }, []);
+  const enterpriseAuthorization = useEnterpriseApiKeyAuthorization(
+    "editor",
+    handleEnterpriseAuthorizedKey,
+  );
+
+  useEffect(() => {
+    if (!usesEnterpriseAuthorization) enterpriseAuthorization.discard();
+  }, [enterpriseAuthorization.discard, usesEnterpriseAuthorization]);
 
   const applyDesktopPreset = (
     preset: ClaudeDesktopProviderPreset,
@@ -974,14 +996,48 @@ export function ClaudeDesktopProviderForm({
             ) : (
               <ApiKeySection
                 value={apiKey}
-                onChange={setApiKey}
+                onChange={(value) => {
+                  setApiKey(value);
+                  setEnterpriseKeyFilled(false);
+                }}
                 category={apiKeyLinkCategory}
                 shouldShowLink={shouldShowApiKeyLink}
                 websiteUrl={apiKeyLinkWebsiteUrl}
                 isPartner={apiKeyLinkIsPartner}
                 partnerPromotionKey={apiKeyLinkPromotionKey}
+                onGetApiKey={
+                  usesEnterpriseAuthorization
+                    ? () =>
+                        void enterpriseAuthorization.start(
+                          normalizeAi302RootUrl(baseUrl),
+                        )
+                    : undefined
+                }
+                getApiKeyDisabled={enterpriseAuthorization.status === "waiting"}
               />
             )}
+
+            {usesEnterpriseAuthorization &&
+              enterpriseAuthorization.status !== "idle" &&
+              enterpriseAuthorization.status !== "waiting" && (
+                <p className="text-sm text-destructive">
+                  {enterpriseAuthorization.status === "pageUnavailable"
+                    ? t("onboarding.authorizationPageUnavailable", {
+                        defaultValue: "授权页面无法访问，请检查地址和网络",
+                      })
+                    : enterpriseAuthorization.status === "cancelled"
+                      ? t("onboarding.authorizationCancelled", {
+                          defaultValue: "已取消获取 API Key",
+                        })
+                      : enterpriseAuthorization.status === "stateMismatch"
+                        ? t("onboarding.authorizationStateMismatch", {
+                            defaultValue: "授权状态不匹配，请重新获取",
+                          })
+                        : t("onboarding.authorizationInvalidCallback", {
+                            defaultValue: "授权返回内容无效，请重新获取",
+                          })}
+                </p>
+              )}
 
             <EndpointField
               id="baseUrl"

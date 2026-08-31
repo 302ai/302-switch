@@ -8,6 +8,48 @@ use crate::error::AppError;
 use std::collections::HashMap;
 use url::Url;
 
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthorizationCallback {
+    pub state: String,
+    pub api_key: String,
+}
+
+pub fn parse_authorization_callback(url_str: &str) -> Result<AuthorizationCallback, AppError> {
+    let url = Url::parse(url_str)
+        .map_err(|e| AppError::InvalidInput(format!("Invalid authorization callback: {e}")))?;
+    if url.scheme() != DEEP_LINK_SCHEME
+        || url.host_str() != Some("auth")
+        || url.path() != "/callback"
+    {
+        return Err(AppError::InvalidInput(
+            "Invalid authorization callback address".to_string(),
+        ));
+    }
+    let pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+    let params: HashMap<String, String> = pairs.iter().cloned().collect();
+    if pairs.len() != 2 || !params.contains_key("state") || !params.contains_key("api_key") {
+        return Err(AppError::InvalidInput(
+            "Authorization callback must contain only state and api_key".to_string(),
+        ));
+    }
+    let state = params
+        .get("state")
+        .filter(|value| !value.is_empty())
+        .cloned()
+        .ok_or_else(|| {
+            AppError::InvalidInput("Missing authorization callback state".to_string())
+        })?;
+    let api_key = params
+        .get("api_key")
+        .filter(|value| !value.is_empty())
+        .cloned()
+        .ok_or_else(|| {
+            AppError::InvalidInput("Missing authorization callback API key".to_string())
+        })?;
+    Ok(AuthorizationCallback { state, api_key })
+}
+
 /// Parse a ccswitch302:// URL into a DeepLinkImportRequest
 ///
 /// Expected format:

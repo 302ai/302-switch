@@ -29,9 +29,17 @@ pub fn is_supported_deeplink_url(url: &str) -> bool {
         .is_some_and(|(scheme, _)| scheme == DEEP_LINK_SCHEME || scheme == LEGACY_DEEP_LINK_SCHEME)
 }
 
+pub fn is_authorization_callback_url(url: &str) -> bool {
+    url::Url::parse(url).is_ok_and(|parsed| {
+        parsed.scheme() == DEEP_LINK_SCHEME
+            && parsed.host_str() == Some("auth")
+            && parsed.path() == "/callback"
+    })
+}
+
 // Re-export public API
 pub use mcp::import_mcp_from_deeplink;
-pub use parser::parse_deeplink_url;
+pub use parser::{parse_authorization_callback, parse_deeplink_url};
 pub use prompt::import_prompt_from_deeplink;
 pub use provider::{import_provider_from_deeplink, parse_and_merge_config};
 pub use skill::import_skill_from_deeplink;
