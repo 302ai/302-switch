@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run: build and verify, do not publish release'
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -657,6 +663,7 @@ jobs:
     name: Publish GitHub Release
     runs-on: ubuntu-22.04
     needs: release
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
     permissions:
       contents: write
     steps:
@@ -731,6 +738,7 @@ jobs:
     name: Assemble latest.json
     runs-on: ubuntu-22.04
     needs: publish-release
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
     permissions:
       contents: write
     steps:
